@@ -37,3 +37,8 @@ export function timeAgo(iso: string): string {
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
 }
+
+/** Format a contract ID to a display-friendly form: "CAAAA...ZZZZ" */
+export function formatContractId(id: string): string {
+  return shortHash(id, 8);
+}
