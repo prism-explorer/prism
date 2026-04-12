@@ -1,0 +1,24 @@
+{
+  "name": "prism",
+  "version": "0.1.0",
+  "description": "Open-source Soroban-native block explorer for the Stellar network",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "keywords": ["stellar", "soroban", "explorer", "blockchain", "prism"],
+  "license": "MIT",
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "@stellar/stellar-sdk": "^12.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/react": "^18.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
