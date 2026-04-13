@@ -2,6 +2,8 @@ import { getLedger } from "@/lib/horizon";
 import { formatDate, formatNumber } from "@/lib/format";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 interface Props { params: { seq: string } }
 
 export default async function LedgerPage({ params }: Props) {

@@ -2,6 +2,8 @@ import { getTransaction } from "@/lib/horizon";
 import { shortHash, formatDate, formatFee, stroopsToXlm } from "@/lib/format";
 import { notFound } from "next/navigation";
 
+export const dynamic = "force-dynamic";
+
 interface Props { params: { hash: string } }
 
 export default async function TxPage({ params }: Props) {

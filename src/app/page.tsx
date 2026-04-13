@@ -3,13 +3,20 @@ import LedgerStats from "@/components/LedgerStats";
 import TransactionCard from "@/components/TransactionCard";
 import { getLatestLedger, getRecentTransactions } from "@/lib/horizon";
 
-export const revalidate = 10;
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [ledger, transactions] = await Promise.all([
-    getLatestLedger(),
-    getRecentTransactions(10),
-  ]);
+  let ledger = null;
+  let transactions: any[] = [];
+
+  try {
+    [ledger, transactions] = await Promise.all([
+      getLatestLedger(),
+      getRecentTransactions(10),
+    ]);
+  } catch {
+    // Network unavailable during build or runtime — render gracefully
+  }
 
   return (
     <div>
@@ -21,15 +28,19 @@ export default async function Home() {
         <SearchBar />
       </section>
 
-      <LedgerStats ledger={ledger} />
+      {ledger && <LedgerStats ledger={ledger} />}
 
       <section className="mt-10">
         <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
-        <div className="space-y-2">
-          {transactions.map((tx) => (
-            <TransactionCard key={tx.hash} tx={tx} />
-          ))}
-        </div>
+        {transactions.length === 0 ? (
+          <p className="text-prism-muted text-sm">Connecting to Stellar network…</p>
+        ) : (
+          <div className="space-y-2">
+            {transactions.map((tx) => (
+              <TransactionCard key={tx.hash} tx={tx} />
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
