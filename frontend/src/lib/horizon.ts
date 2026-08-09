@@ -33,7 +33,7 @@ function mapLedger(r: any): LedgerRecord {
     sequence: r.sequence,
     hash: r.hash,
     closedAt: r.closed_at,
-    transactionCount: r.transaction_count,
+    transactionCount: r.successful_transaction_count + r.failed_transaction_count,
     operationCount: r.operation_count,
     baseFee: r.base_fee_in_stroops,
     successfulTransactionCount: r.successful_transaction_count,
