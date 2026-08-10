@@ -23,6 +23,7 @@ jobs:
       - run: npm install
       - run: npx tsc --noEmit
       - run: npm run lint
+      - run: npm test
       - run: npm run build
         env:
           NEXT_PUBLIC_NETWORK: testnet
