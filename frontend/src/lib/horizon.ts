@@ -28,6 +28,34 @@ export async function getRecentTransactions(limit = 20): Promise<TransactionReco
   return data._embedded.records.map(mapTransaction);
 }
 
+export interface NetworkPulse {
+  sequence: number;
+  transactionsPerSecond: number;
+  closeTimeSeconds: number;
+  operationCount: number;
+  baseFee: number;
+}
+
+/**
+ * A snapshot of network activity derived from the two most recent ledgers.
+ * transactionsPerSecond/closeTimeSeconds are single-sample estimates (real
+ * numbers, not fabricated) — expect them to be noisy ledger-to-ledger.
+ */
+export async function getNetworkPulse(): Promise<NetworkPulse> {
+  const data = await get<any>("/ledgers?order=desc&limit=2");
+  const [latest, prev] = data._embedded.records;
+  const closeTimeSeconds =
+    (new Date(latest.closed_at).getTime() - new Date(prev.closed_at).getTime()) / 1000;
+  const txCount = latest.successful_transaction_count + latest.failed_transaction_count;
+  return {
+    sequence: latest.sequence,
+    transactionsPerSecond: closeTimeSeconds > 0 ? txCount / closeTimeSeconds : 0,
+    closeTimeSeconds,
+    operationCount: latest.operation_count,
+    baseFee: latest.base_fee_in_stroops,
+  };
+}
+
 function mapLedger(r: any): LedgerRecord {
   return {
     sequence: r.sequence,

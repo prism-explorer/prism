@@ -1,9 +1,16 @@
 import Link from "next/link";
+import AutoRefresh from "@/components/AutoRefresh";
+import { getNetworkPulse, type NetworkPulse } from "@/lib/horizon";
+import { getRecentNetworkActivity } from "@/lib/soroban";
+import { shortHash, formatNumber } from "@/lib/format";
+import type { NetworkActivityItem } from "@/lib/soroban";
+
+export const dynamic = "force-dynamic";
 
 const GITHUB_URL = "https://github.com/prism-explorer/prism";
 const CONTRIBUTING_URL = `${GITHUB_URL}/blob/main/CONTRIBUTING.md`;
 
-const mono: React.CSSProperties = { fontFamily: "'JetBrains Mono', monospace" };
+const mono: React.CSSProperties = { fontFamily: "var(--font-jetbrains-mono), monospace" };
 const sectionLabel: React.CSSProperties = {
   ...mono,
   fontSize: 12,
@@ -13,9 +20,18 @@ const sectionLabel: React.CSSProperties = {
   marginBottom: 36,
 };
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  let pulse: NetworkPulse | null = null;
+  let activity: NetworkActivityItem[] = [];
+  try {
+    [pulse, activity] = await Promise.all([getNetworkPulse(), getRecentNetworkActivity(5)]);
+  } catch {
+    // Network unavailable at build/runtime — render without the live stats.
+  }
+
   return (
     <div className="landing">
+      <AutoRefresh intervalMs={8000} />
       <div
         className="ticker"
         style={{
@@ -36,13 +52,19 @@ export default function LandingPage() {
           <span className="pulse-dot" style={{ width: 6, height: 6, background: "var(--green)", display: "inline-block" }} />
           LIVE
         </span>
-        <span>LEDGER 52,481,920</span>
-        <span style={{ color: "var(--text-faint)" }}>|</span>
-        <span>TPS 214</span>
-        <span style={{ color: "var(--text-faint)" }}>|</span>
-        <span>CLOSE 5.2s</span>
-        <span style={{ color: "var(--text-faint)" }}>|</span>
-        <span>ACTIVE CONTRACTS 8,204</span>
+        {pulse ? (
+          <>
+            <span>LEDGER {formatNumber(pulse.sequence)}</span>
+            <span style={{ color: "var(--text-faint)" }}>|</span>
+            <span>TPS {pulse.transactionsPerSecond.toFixed(1)}</span>
+            <span style={{ color: "var(--text-faint)" }}>|</span>
+            <span>CLOSE {pulse.closeTimeSeconds.toFixed(1)}s</span>
+            <span style={{ color: "var(--text-faint)" }}>|</span>
+            <span>OPERATIONS {formatNumber(pulse.operationCount)}</span>
+          </>
+        ) : (
+          <span>connecting to Stellar network…</span>
+        )}
       </div>
 
       <nav className="nav-links">
@@ -71,7 +93,7 @@ export default function LandingPage() {
           <div style={{ ...mono, fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--amber)", marginBottom: 22 }}>
             &gt; soroban_native_explorer
           </div>
-          <h1 style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 68, lineHeight: 1.03, letterSpacing: "-0.02em", margin: "0 0 26px" }}>
+          <h1 style={{ fontFamily: "var(--font-space-grotesk), sans-serif", fontWeight: 700, fontSize: 68, lineHeight: 1.03, letterSpacing: "-0.02em", margin: "0 0 26px" }}>
             See inside every{" "}
             <span style={{ color: "var(--amber)", textShadow: "0 0 30px rgba(255,176,32,0.45)" }}>Soroban</span> contract.
           </h1>
@@ -105,33 +127,20 @@ export default function LandingPage() {
         >
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
             <span className="pulse-dot" style={{ width: 6, height: 6, background: "var(--green)", display: "inline-block" }} />
-            <span style={{ color: "var(--text-faint)", letterSpacing: "0.04em" }}>live_invocations.log</span>
+            <span style={{ color: "var(--text-faint)", letterSpacing: "0.04em" }}>recent_contract_events.log</span>
           </div>
           <div style={{ padding: "16px 20px 20px", display: "grid", gap: 10 }}>
-            <div className="log-row">
-              <span style={{ color: "var(--text-faint)" }}>14:02:11</span>
-              <span style={{ color: "var(--amber)" }}>swap</span>
-              <span style={{ color: "var(--text-dim)" }}>A&rarr;B, amount=5000</span>
-              <span style={{ color: "var(--green)", textAlign: "right" }}>ok</span>
-            </div>
-            <div className="log-row">
-              <span style={{ color: "var(--text-faint)" }}>14:01:47</span>
-              <span style={{ color: "var(--amber)" }}>deposit</span>
-              <span style={{ color: "var(--text-dim)" }}>shares_minted=1840</span>
-              <span style={{ color: "var(--green)", textAlign: "right" }}>ok</span>
-            </div>
-            <div className="log-row">
-              <span style={{ color: "var(--text-faint)" }}>14:01:19</span>
-              <span style={{ color: "var(--amber)" }}>swap</span>
-              <span style={{ color: "var(--text-dim)" }}>B&rarr;A, amount=900</span>
-              <span style={{ color: "var(--red)", textAlign: "right" }}>fail</span>
-            </div>
-            <div className="log-row">
-              <span style={{ color: "var(--text-faint)" }}>14:00:52</span>
-              <span style={{ color: "var(--amber)" }}>withdraw</span>
-              <span style={{ color: "var(--text-dim)" }}>shares=120</span>
-              <span style={{ color: "var(--green)", textAlign: "right" }}>ok</span>
-            </div>
+            {activity.length > 0 ? (
+              activity.map((item) => (
+                <div key={item.txHash + item.topic} className="log-row" style={{ gridTemplateColumns: "56px 90px 1fr" }}>
+                  <span style={{ color: "var(--text-faint)" }}>#{item.ledger}</span>
+                  <span style={{ color: "var(--amber)" }}>{item.topic}</span>
+                  <span style={{ color: "var(--text-dim)", textAlign: "right" }}>{shortHash(item.contractId, 6)}</span>
+                </div>
+              ))
+            ) : (
+              <span style={{ color: "var(--text-faint)" }}>connecting to Soroban RPC…</span>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
               <span style={{ color: "var(--text-faint)" }}>&gt;</span>
               <span className="pulse-dot" style={{ width: 7, height: 12, background: "var(--amber)", display: "inline-block" }} />
@@ -166,9 +175,9 @@ export default function LandingPage() {
         <div style={sectionLabel}>02 — Features</div>
         <div className="features-grid">
           <FeatureCard badge="Live now" live title="Contract Explorer" desc="WASM bytecode, live storage, invocation history and events for any deployed contract." />
-          <FeatureCard badge="Roadmap" title="Transaction Explorer" desc="Soroban-aware decoding, dry-run simulation and resource/fee breakdowns." />
-          <FeatureCard badge="Roadmap" title="Ledger & Network" desc="Real-time ledger streaming, TPS and close-time stats, unified search." />
-          <FeatureCard badge="Roadmap" title="Developer Tools" desc="In-browser contract invocation, ABI display and an XDR decoder." />
+          <FeatureCard badge="Live now" live title="Transaction Explorer" desc="Soroban-aware decoding and resource/fee breakdowns for any transaction." />
+          <FeatureCard badge="Live now" live title="Ledger & Network" desc="Auto-refreshing ledger overview, network pulse stats, and unified search." />
+          <FeatureCard badge="Live now" live title="Developer Tools" desc="In-browser contract invocation (simulate), ABI display and an XDR decoder." />
         </div>
       </section>
 
@@ -200,12 +209,12 @@ export default function LandingPage() {
       <section id="roadmap" style={{ maxWidth: 1240, margin: "0 auto", padding: "80px 32px" }}>
         <div style={sectionLabel}>04 — Roadmap</div>
         <div style={{ display: "grid", gap: 0, maxWidth: 760, ...mono, fontSize: 14 }}>
-          <RoadmapRow label="Ledger overview and real-time streaming" done={false} />
-          <RoadmapRow label="Transaction explorer with Soroban decoding" done={false} />
-          <RoadmapRow label="Contract storage inspector" done status="IN PREVIEW" />
-          <RoadmapRow label="Contract invocation history and event log" done status="IN PREVIEW" />
-          <RoadmapRow label="In-browser contract invocation tool" done={false} />
-          <RoadmapRow label="XDR decoder" done={false} />
+          <RoadmapRow label="Ledger overview and auto-refreshing updates" done status="LIVE" />
+          <RoadmapRow label="Transaction explorer with Soroban decoding" done status="LIVE" />
+          <RoadmapRow label="Contract storage inspector" done status="LIVE" />
+          <RoadmapRow label="Contract invocation history and event log" done status="LIVE" />
+          <RoadmapRow label="In-browser contract invocation tool (simulate)" done status="LIVE" />
+          <RoadmapRow label="XDR decoder" done status="LIVE" />
           <RoadmapRow label="Docker Compose & mainnet deployment" done={false} last />
         </div>
       </section>
@@ -223,7 +232,7 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: "0 auto", position: "relative" }}>
           <h2
             className="cta-heading"
-            style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 54, lineHeight: 1.06, margin: "0 0 30px", maxWidth: "16ch", color: "var(--amber)", textShadow: "0 0 40px rgba(255,176,32,0.35)" }}
+            style={{ fontFamily: "var(--font-space-grotesk), sans-serif", fontWeight: 700, fontSize: 54, lineHeight: 1.06, margin: "0 0 30px", maxWidth: "16ch", color: "var(--amber)", textShadow: "0 0 40px rgba(255,176,32,0.35)" }}
           >
             Explore Soroban, openly.
           </h2>
@@ -260,7 +269,7 @@ function FeatureCard({ badge, title, desc, live }: { badge: string; title: strin
         {live && <span className="pulse-dot" style={{ width: 5, height: 5, background: "var(--amber)", display: "inline-block" }} />}
         {badge}
       </span>
-      <h4 style={{ margin: "6px 0 0", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 19 }}>{title}</h4>
+      <h4 style={{ margin: "6px 0 0", fontFamily: "var(--font-space-grotesk), sans-serif", fontWeight: 700, fontSize: 19 }}>{title}</h4>
       <p style={{ fontSize: 13, color: "var(--text-dim)", margin: 0, flex: 1 }}>{desc}</p>
     </div>
   );
