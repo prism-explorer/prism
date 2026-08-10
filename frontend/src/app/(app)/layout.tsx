@@ -4,6 +4,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: "Prism — Soroban Block Explorer",
   description: "Open-source block explorer with full Soroban smart contract support for the Stellar network.",
   openGraph: {
