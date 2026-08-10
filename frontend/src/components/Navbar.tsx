@@ -13,6 +13,7 @@ export default function Navbar() {
         </div>
         <div className="flex gap-5 text-sm text-prism-muted shrink-0">
           <Link href="/explorer" className="hover:text-white transition">Home</Link>
+          <Link href="/docs" className="hover:text-white transition">API</Link>
           <a
             href="https://github.com/prism-explorer/prism"
             target="_blank"
