@@ -1,4 +1,4 @@
-import type { LedgerRecord, TransactionRecord } from "@/types";
+import type { AccountRecord, LedgerRecord, TransactionRecord } from "@/types";
 
 const BASE_URL = process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
 
@@ -29,6 +29,11 @@ export async function getTransaction(hash: string): Promise<TransactionRecord> {
 export async function getRecentTransactions(limit = 20): Promise<TransactionRecord[]> {
   const data = await get<any>(`/transactions?order=desc&limit=${limit}`);
   return data._embedded.records.map(mapTransaction);
+}
+
+export async function getAccount(id: string): Promise<AccountRecord> {
+  const data = await get<any>(`/accounts/${id}`);
+  return mapAccount(data);
 }
 
 export interface NetworkPulse {
@@ -69,6 +74,33 @@ function mapLedger(r: any): LedgerRecord {
     baseFee: r.base_fee_in_stroops,
     successfulTransactionCount: r.successful_transaction_count,
     failedTransactionCount: r.failed_transaction_count,
+  };
+}
+
+function mapAccount(r: any): AccountRecord {
+  return {
+    id: r.account_id,
+    sequence: r.sequence,
+    subentryCount: r.subentry_count,
+    lastModifiedLedger: r.last_modified_ledger,
+    thresholds: {
+      low: r.thresholds.low_threshold,
+      med: r.thresholds.med_threshold,
+      high: r.thresholds.high_threshold,
+    },
+    flags: {
+      authRequired: r.flags.auth_required,
+      authRevocable: r.flags.auth_revocable,
+      authImmutable: r.flags.auth_immutable,
+      authClawbackEnabled: r.flags.auth_clawback_enabled,
+    },
+    balances: r.balances.map((b: any) => ({
+      assetType: b.asset_type,
+      assetCode: b.asset_code,
+      assetIssuer: b.asset_issuer,
+      balance: b.balance,
+    })),
+    signerCount: r.signers?.length ?? 0,
   };
 }
 

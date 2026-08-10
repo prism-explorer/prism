@@ -16,6 +16,7 @@ export default function SearchBar({ initialValue = "" }: Props) {
     // Route based on format
     if (q.length === 64) router.push(`/tx/${q}`);          // tx hash
     else if (q.length === 56 && q.startsWith("C")) router.push(`/contract/${q}`);
+    else if (q.length === 56 && q.startsWith("G")) router.push(`/account/${q}`);
     else if (/^\d+$/.test(q)) router.push(`/ledger/${q}`);  // ledger sequence
     else router.push(`/search?q=${encodeURIComponent(q)}`);
   }
@@ -26,7 +27,7 @@ export default function SearchBar({ initialValue = "" }: Props) {
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search by tx hash, contract ID, or ledger #"
+        placeholder="Search by tx hash, contract ID, account address, or ledger #"
         className="flex-1 bg-prism-bg border border-prism-border rounded-lg px-4 py-2 text-sm outline-none focus:border-prism-accent font-mono placeholder:font-sans placeholder:text-prism-muted"
       />
       <button

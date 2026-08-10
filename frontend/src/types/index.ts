@@ -21,6 +21,29 @@ export interface TransactionRecord {
   envelopeXdr: string;
 }
 
+export interface AccountBalance {
+  assetType: string;
+  assetCode?: string;
+  assetIssuer?: string;
+  balance: string;
+}
+
+export interface AccountRecord {
+  id: string;
+  sequence: string;
+  subentryCount: number;
+  lastModifiedLedger: number;
+  thresholds: { low: number; med: number; high: number };
+  flags: {
+    authRequired: boolean;
+    authRevocable: boolean;
+    authImmutable: boolean;
+    authClawbackEnabled: boolean;
+  };
+  balances: AccountBalance[];
+  signerCount: number;
+}
+
 export interface ContractRecord {
   id: string;
   wasmHash: string;
