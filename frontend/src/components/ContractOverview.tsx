@@ -1,0 +1,63 @@
+import type { ContractInfo, ContractWasmInfo } from "@/types";
+import { formatNumber } from "@/lib/format";
+
+interface Props { info: ContractInfo | null; wasm: ContractWasmInfo | null }
+
+export default function ContractOverview({ info, wasm }: Props) {
+  if (!info) {
+    return (
+      <p className="text-prism-muted text-sm">
+        Couldn&apos;t load this contract — double-check the ID, or the RPC endpoint may be unreachable.
+      </p>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-prism-border bg-prism-surface p-6 space-y-4">
+      <Row label="Executable" value={info.executable === "wasm" ? "WASM contract" : "Stellar Asset Contract"} />
+      {info.wasmHash && <Row label="WASM Hash" value={info.wasmHash} mono />}
+      {wasm && <Row label="WASM Size" value={`${formatNumber(wasm.size)} bytes`} />}
+      {info.liveUntilLedgerSeq !== undefined && (
+        <Row label="Live Until Ledger" value={`#${formatNumber(info.liveUntilLedgerSeq)}`} />
+      )}
+      {info.lastModifiedLedgerSeq !== undefined && (
+        <Row label="Last Modified Ledger" value={`#${formatNumber(info.lastModifiedLedgerSeq)}`} />
+      )}
+
+      {wasm && wasm.functions.length > 0 && (
+        <div className="pt-2">
+          <p className="text-prism-muted text-sm mb-2">Functions ({wasm.functions.length})</p>
+          <div className="rounded-lg border border-prism-border overflow-x-auto">
+            <table className="w-full text-xs">
+              <tbody>
+                {wasm.functions.map((fn) => (
+                  <tr key={fn.name} className="border-b border-prism-border last:border-0">
+                    <td className="px-3 py-2 font-mono text-prism-accent whitespace-nowrap align-top">{fn.name}</td>
+                    <td className="px-3 py-2 font-mono text-prism-muted">
+                      ({fn.inputs.map((i) => `${i.name}: ${i.type}`).join(", ")})
+                      {fn.outputs.length > 0 && <> &rarr; {fn.outputs.join(", ")}</>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+      {wasm && wasm.functions.length === 0 && (
+        <p className="text-prism-muted text-xs pt-2">
+          No embedded ABI found for this contract — not every contract includes one.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex justify-between border-b border-prism-border pb-3 last:border-0 last:pb-0 gap-4">
+      <span className="text-prism-muted text-sm shrink-0">{label}</span>
+      <span className={`text-sm text-right break-all ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
