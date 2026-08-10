@@ -1,9 +1,9 @@
 import { getContractInfo, getContractWasmInfo, getContractEvents, getInvocationHistory } from "@/lib/soroban";
 import ContractOverview from "@/components/ContractOverview";
 import ContractStorageView from "@/components/ContractStorageView";
-import InvocationHistory from "@/components/InvocationHistory";
+import LiveInvocationHistory from "@/components/LiveInvocationHistory";
 import InvokeTool from "@/components/InvokeTool";
-import EventLog from "@/components/EventLog";
+import LiveEventLog from "@/components/LiveEventLog";
 
 export const dynamic = "force-dynamic";
 
@@ -42,15 +42,30 @@ export default async function ContractPage({ params }: Props) {
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-3">Recent Invocations</h2>
-          <InvocationHistory items={invocations} />
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            Recent Invocations
+            <LiveBadge />
+          </h2>
+          <LiveInvocationHistory contractId={contractId} initialItems={invocations} />
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold mb-3">Events</h2>
-          <EventLog events={events} />
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            Events
+            <LiveBadge />
+          </h2>
+          <LiveEventLog contractId={contractId} initialEvents={events} />
         </section>
       </div>
     </div>
+  );
+}
+
+function LiveBadge() {
+  return (
+    <span className="flex items-center gap-1.5 text-xs font-normal text-prism-muted">
+      <span className="w-1.5 h-1.5 rounded-full bg-prism-green animate-pulse" />
+      auto-updating
+    </span>
   );
 }
