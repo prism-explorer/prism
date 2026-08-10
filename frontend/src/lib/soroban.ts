@@ -12,7 +12,7 @@ const RPC_URL = process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-test
 
 let _server: rpc.Server | undefined;
 function server(): rpc.Server {
-  if (!_server) _server = new rpc.Server(RPC_URL);
+  if (!_server) _server = new rpc.Server(RPC_URL, { timeout: 10_000 });
   return _server;
 }
 

@@ -3,7 +3,10 @@ import type { LedgerRecord, TransactionRecord } from "@/types";
 const BASE_URL = process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, { next: { revalidate: 10 } });
+  const res = await fetch(`${BASE_URL}${path}`, {
+    next: { revalidate: 10 },
+    signal: AbortSignal.timeout(10_000),
+  });
   if (!res.ok) throw new Error(`Horizon error ${res.status}: ${path}`);
   return res.json();
 }
