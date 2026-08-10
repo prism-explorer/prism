@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { simulateInvocation } from "@/lib/soroban";
 import { coerceArgInput } from "@/lib/xdr";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ interface SimulateBody {
 }
 
 export async function POST(req: Request, { params }: Params) {
+  const limited = rateLimit(req, { scope: "contract-simulate", max: 10 });
+  if (limited) return limited;
+
   let body: SimulateBody;
   try {
     body = await req.json();
