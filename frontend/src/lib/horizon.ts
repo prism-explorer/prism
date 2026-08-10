@@ -51,5 +51,6 @@ function mapTransaction(r: any): TransactionRecord {
     operationCount: r.operation_count,
     successful: r.successful,
     memo: r.memo,
+    envelopeXdr: r.envelope_xdr,
   };
 }
