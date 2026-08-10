@@ -1,13 +1,15 @@
 import SearchBar from "@/components/SearchBar";
 import LedgerStats from "@/components/LedgerStats";
 import TransactionCard from "@/components/TransactionCard";
+import AutoRefresh from "@/components/AutoRefresh";
 import { getLatestLedger, getRecentTransactions } from "@/lib/horizon";
+import type { TransactionRecord } from "@/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   let ledger = null;
-  let transactions: any[] = [];
+  let transactions: TransactionRecord[] = [];
 
   try {
     [ledger, transactions] = await Promise.all([
@@ -20,6 +22,8 @@ export default async function Home() {
 
   return (
     <div>
+      <AutoRefresh intervalMs={6000} />
+
       <section className="text-center py-12">
         <h1 className="text-4xl font-bold mb-2">Prism</h1>
         <p className="text-prism-muted mb-8">
@@ -31,7 +35,13 @@ export default async function Home() {
       {ledger && <LedgerStats ledger={ledger} />}
 
       <section className="mt-10">
-        <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
+        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+          Recent Transactions
+          <span className="flex items-center gap-1.5 text-xs font-normal text-prism-muted">
+            <span className="w-1.5 h-1.5 rounded-full bg-prism-green animate-pulse" />
+            auto-updating
+          </span>
+        </h2>
         {transactions.length === 0 ? (
           <p className="text-prism-muted text-sm">Connecting to Stellar network…</p>
         ) : (
