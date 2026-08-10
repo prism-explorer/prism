@@ -18,6 +18,7 @@ export interface TransactionRecord {
   operationCount: number;
   successful: boolean;
   memo?: string;
+  envelopeXdr: string;
 }
 
 export interface ContractRecord {
@@ -34,6 +35,7 @@ export interface ContractEvent {
   type: string;
   topic: string[];
   value: string;
+  txHash: string;
   ledger: number;
   timestamp: string;
 }
@@ -42,6 +44,51 @@ export interface StorageEntry {
   key: string;
   value: string;
   durability: "persistent" | "temporary" | "instance";
+}
+
+/** Info derivable from a contract's instance ledger entry alone (always fetchable from just a contract ID). */
+export interface ContractInfo {
+  executable: "wasm" | "stellar_asset";
+  wasmHash?: string;
+  liveUntilLedgerSeq?: number;
+  lastModifiedLedgerSeq?: number;
+  instanceStorage: StorageEntry[];
+}
+
+export interface ContractFunctionSpec {
+  name: string;
+  inputs: { name: string; type: string }[];
+  outputs: string[];
+}
+
+export interface ContractWasmInfo {
+  size: number;
+  functions: ContractFunctionSpec[];
+}
+
+/** A Soroban invocation decoded from a transaction's InvokeHostFunction operation. */
+export interface SorobanInvocation {
+  contractId: string;
+  functionName: string;
+  args: string[];
+}
+
+export interface ResourceUsage {
+  instructions: number;
+  readBytes: number;
+  writeBytes: number;
+  resourceFeeStroops: string;
+}
+
+/** One entry in a contract's recent activity, derived from its emitted events
+ *  (bounded by the RPC node's retention window — not full history). */
+export interface InvocationHistoryItem {
+  txHash: string;
+  ledger: number;
+  timestamp: string;
+  functionName?: string;
+  args?: string[];
+  successful: boolean;
 }
 
 export type Network = "testnet" | "mainnet";
