@@ -50,27 +50,57 @@ When a developer deploys a Soroban contract, they need to inspect its storage st
                    │
 ┌──────────────────▼──────────────────────────────────┐
 │                  Prism API (Next.js API routes)      │
-└──────────────────┬──────────────────────────────────┘
-                   │
-         ┌─────────┴──────────┐
-         │                    │
-┌────────▼──────┐   ┌─────────▼────────┐
-│ Stellar Horizon│   │  Soroban RPC     │
-│ (classic ops) │   │  (contract data) │
-└───────────────┘   └──────────────────┘
+└──────────────────┬───────────────────┬──────────────┘
+                   │                   │
+         ┌─────────┴──────────┐        │ (optional)
+         │                    │        │
+┌────────▼──────┐   ┌─────────▼────────┐  ┌──▼──────────────┐
+│ Stellar Horizon│   │  Soroban RPC     │  │  Postgres        │
+│ (classic ops) │   │  (contract data) │  │  (indexed data)  │
+└───────────────┘   └────────┬─────────┘  └──▲──────────────┘
+                              │                │
+                    ┌─────────▼────────────────┴──┐
+                    │  indexer/ (forward-only)     │
+                    │  polls Soroban RPC, persists │
+                    │  storage/invocations/events  │
+                    └───────────────────────────────┘
 ```
+
+The frontend works standalone against public RPC/Horizon endpoints — no database required. That gets you live chain state but is bounded by the RPC node's retention window (~24h) for events/history, and there's no way to enumerate a contract's storage keys via RPC at all (no such method exists). Running the optional `indexer/` service alongside it removes both limits for data observed since the indexer started: full invocation/event history and genuine storage-key enumeration, not just point lookups. It's forward-only by design — no historical backfill from before it started running.
+
+---
+
+## Self-Hosting
+
+Standalone (frontend only, no database):
+
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Full stack, including the indexer for full storage enumeration and unbounded history:
+
+```bash
+docker compose up
+```
+
+This runs Postgres, the indexer (`indexer/`), and the frontend together — see [Architecture](#architecture) above for what running the indexer actually buys you.
 
 ---
 
 ## Roadmap
 
-- [ ] Ledger overview and real-time streaming
-- [ ] Transaction explorer with Soroban decoding
-- [ ] Contract storage inspector
-- [ ] Contract invocation history and event log
-- [ ] In-browser contract invocation tool
-- [ ] XDR decoder
-- [ ] Docker Compose for self-hosting
+- [x] Ledger overview and real-time streaming
+- [x] Transaction explorer with Soroban decoding
+- [x] Contract storage inspector
+- [x] Contract invocation history and event log
+- [x] In-browser contract invocation tool
+- [x] XDR decoder
+- [x] Docker Compose for self-hosting
+- [x] Optional indexer for full storage enumeration and unbounded history
 - [ ] Mainnet deployment at prism.network
 
 ---
