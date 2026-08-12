@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Singleton row (id always 1) tracking how far the indexer has processed.
+// Forward-only: on first run this is seeded to the current latest ledger,
+// not backfilled from history.
+model IndexerCursor {
+  id         Int      @id @default(1)
+  lastLedger Int
+  updatedAt  DateTime @updatedAt
+}
+
+model Invocation {
+  id            String   @id @default(cuid())
+  txHash        String
+  ledger        Int
+  createdAt     DateTime
+  contractId    String
+  functionName  String
+  args          Json
+  successful    Boolean
+  sourceAccount String
+
+  @@unique([txHash])
+  @@index([contractId, ledger])
+}
+
+// One row per observed change to a contract storage entry (not just the
+// latest value) — an append-only log. "Current value" for a key is its
+// most recent non-removed row. This is what makes full key enumeration
+// possible for contracts touched since the indexer started, which plain
+// RPC access can't do at all.
+model StorageChange {
+  id           String   @id @default(cuid())
+  contractId   String
+  durability   String // persistent | temporary | instance
+  keyDisplay   String // human-readable decoded key ("__instance__" for the contract instance entry)
+  valueDisplay String? // human-readable decoded value; null when changeType is "removed"
+  changeType   String // created | updated | removed | state
+  ledger       Int
+  txHash       String
+  createdAt    DateTime
+
+  @@unique([txHash, contractId, keyDisplay, durability, changeType])
+  @@index([contractId, keyDisplay, durability, ledger])
+  @@index([contractId, ledger])
+}
+
+model ContractEventRecord {
+  id         String   @id @default(cuid())
+  eventId    String   @unique
+  contractId String
+  type       String
+  topic      Json
+  value      String
+  txHash     String
+  ledger     Int
+  createdAt  DateTime
+
+  @@index([contractId, ledger])
+}

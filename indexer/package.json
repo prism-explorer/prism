@@ -1,0 +1,26 @@
+{
+  "name": "prism-indexer",
+  "version": "0.1.0",
+  "description": "Forward-only indexer for Prism: persists Soroban contract storage changes, invocations, and events to Postgres so the explorer isn't limited to the RPC node's retention window.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.20.0",
+    "@stellar/stellar-sdk": "^16.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "prisma": "^5.20.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.0.0",
+    "vitest": "^4.1.10"
+  }
+}
