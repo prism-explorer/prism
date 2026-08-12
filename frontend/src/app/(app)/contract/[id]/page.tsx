@@ -1,4 +1,4 @@
-import { getContractInfo, getContractWasmInfo, getContractEvents, getInvocationHistory } from "@/lib/soroban";
+import { getContractInfo, getContractWasmInfo, getContractEvents, getInvocationHistory, getFullStorageEntries } from "@/lib/soroban";
 import ContractOverview from "@/components/ContractOverview";
 import ContractStorageView from "@/components/ContractStorageView";
 import LiveInvocationHistory from "@/components/LiveInvocationHistory";
@@ -12,10 +12,11 @@ interface Props { params: { id: string } }
 export default async function ContractPage({ params }: Props) {
   const contractId = params.id;
   const info = await getContractInfo(contractId);
-  const [wasm, events, invocations] = await Promise.all([
+  const [wasm, events, invocations, fullStorage] = await Promise.all([
     info?.executable === "wasm" ? getContractWasmInfo(contractId) : Promise.resolve(null),
     getContractEvents(contractId),
     getInvocationHistory(contractId),
+    getFullStorageEntries(contractId),
   ]);
 
   return (
@@ -38,7 +39,11 @@ export default async function ContractPage({ params }: Props) {
 
         <section>
           <h2 className="text-lg font-semibold mb-3">Storage</h2>
-          <ContractStorageView contractId={contractId} instanceStorage={info?.instanceStorage ?? []} />
+          <ContractStorageView
+            contractId={contractId}
+            instanceStorage={info?.instanceStorage ?? []}
+            fullStorage={fullStorage}
+          />
         </section>
 
         <section>

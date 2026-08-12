@@ -25,18 +25,28 @@ const endpoints: Endpoint[] = [
   {
     method: "GET",
     path: "/api/contract/:id/events",
-    description: "Recent events emitted by the contract.",
+    description: "Events emitted by the contract.",
     params: "limit (default 50)",
     example: "/api/contract/CDPUJYCTPGPEGS6MBXYLEWTYSGCPVKUHCURLF2ORT3RAVL5TF5JKIAI5/events?limit=10",
-    notes: "Bounded by the RPC node's retention window (~24h on public nodes) — not full history.",
+    notes:
+      "Full history since the indexer started, when one is configured (see indexer/). Otherwise bounded by the RPC node's retention window (~24h on public nodes).",
   },
   {
     method: "GET",
     path: "/api/contract/:id/invocations",
-    description: "Recent invocation history, derived from the contract's events.",
+    description: "Invocation history for the contract.",
     params: "limit (default 20)",
     example: "/api/contract/CDPUJYCTPGPEGS6MBXYLEWTYSGCPVKUHCURLF2ORT3RAVL5TF5JKIAI5/invocations",
-    notes: "Same retention-window bound as /events — contracts that never emit events won't show up here.",
+    notes:
+      "Full history since the indexer started, when one is configured. Otherwise derived from recent events and bounded by the same RPC retention window — contracts that never emit events won't show up.",
+  },
+  {
+    method: "GET",
+    path: "/api/contract/:id/storage/full",
+    description: "Every storage key observed for the contract, at its latest known value.",
+    example: "/api/contract/CDPUJYCTPGPEGS6MBXYLEWTYSGCPVKUHCURLF2ORT3RAVL5TF5JKIAI5/storage/full",
+    notes:
+      "Requires the indexer (returns 501 without one) — this is the one thing plain RPC access genuinely cannot do (no method exists to list a contract's storage keys). Forward-only: reflects activity since the indexer started, not full chain history.",
   },
   {
     method: "GET",
@@ -44,7 +54,8 @@ const endpoints: Endpoint[] = [
     description: "Look up one persistent/temporary storage entry by key.",
     params: "key (required), kind: symbol|string|u32|address (required), durability: persistent|temporary (default persistent)",
     example: "/api/contract/:id/storage?key=Admin&kind=symbol&durability=persistent",
-    notes: "There's no way to list all storage keys for a contract via RPC — you have to already know the key.",
+    notes:
+      "Works against live chain state via RPC regardless of whether an indexer is configured — you have to already know the key. For enumeration without knowing keys in advance, see /storage/full.",
   },
   {
     method: "POST",

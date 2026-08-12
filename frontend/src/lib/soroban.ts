@@ -7,6 +7,7 @@ import type {
   StorageEntry,
 } from "@/types";
 import { decodeInvocation, parseContractSpec, scValToDisplay } from "./xdr";
+import { isIndexerConfigured, getIndexedInvocations, getIndexedEvents, getIndexedStorageEntries } from "./indexed-db";
 
 const RPC_URL = process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
 
@@ -91,6 +92,23 @@ export async function lookupStorageEntry(
   }
 }
 
+/**
+ * Every storage entry the indexer has observed for this contract, at its
+ * latest known value — real enumeration of persistent/temporary/instance
+ * keys, which plain RPC access cannot do at all (no such method exists).
+ * Empty when no indexer is configured, or for keys never touched since it
+ * started (forward-only — no historical backfill).
+ */
+export async function getFullStorageEntries(contractId: string): Promise<StorageEntry[]> {
+  if (!isIndexerConfigured()) return [];
+  const indexed = await getIndexedStorageEntries(contractId);
+  return indexed.map((e) => ({
+    key: e.keyDisplay,
+    value: e.valueDisplay,
+    durability: e.durability as StorageEntry["durability"],
+  }));
+}
+
 /** Fetch WASM bytecode size and best-effort parse its embedded ABI (contract spec), if any. */
 export async function getContractWasmInfo(contractId: string): Promise<ContractWasmInfo | null> {
   try {
@@ -105,10 +123,29 @@ export async function getContractWasmInfo(contractId: string): Promise<ContractW
 }
 
 /**
- * Fetch recent events emitted by a contract. Bounded by the RPC node's
- * retention window (public nodes typically retain ~24h) — not full history.
+ * Fetch recent events emitted by a contract. Uses the indexer's full
+ * (forward-only, since-launch) history when one is configured
+ * (DATABASE_URL set); otherwise falls back to the RPC node's retention
+ * window (public nodes typically retain ~24h) — not full history.
  */
 export async function getContractEvents(contractId: string, limit = 50): Promise<ContractEvent[]> {
+  if (isIndexerConfigured()) {
+    const indexed = await getIndexedEvents(contractId, limit);
+    return indexed.map((e) => ({
+      id: e.eventId,
+      contractId,
+      type: e.type,
+      topic: e.topic,
+      value: e.value,
+      txHash: e.txHash,
+      ledger: e.ledger,
+      timestamp: e.createdAt,
+    }));
+  }
+  return getContractEventsFromRpc(contractId, limit);
+}
+
+async function getContractEventsFromRpc(contractId: string, limit: number): Promise<ContractEvent[]> {
   try {
     const s = server();
     const latest = await s.getLatestLedger();
@@ -136,15 +173,28 @@ export async function getContractEvents(contractId: string, limit = 50): Promise
 }
 
 /**
- * Derive a contract's recent invocation history from its emitted events:
+ * A contract's invocation history. Uses the indexer's full (forward-only)
+ * history when configured. Otherwise, derives a proxy from recent events:
  * each event names the transaction that produced it, so we resolve the
  * unique set of recent transaction hashes and decode each one's invoked
- * function + args. This is a proxy for "invocation history" — contracts
- * that never emit events won't show up here, and coverage is bounded by
- * the same RPC retention window as getContractEvents.
+ * function + args — contracts that never emit events won't show up here,
+ * and coverage is bounded by the same RPC retention window as
+ * getContractEvents.
  */
 export async function getInvocationHistory(contractId: string, limit = 20): Promise<InvocationHistoryItem[]> {
-  const events = await getContractEvents(contractId, 200);
+  if (isIndexerConfigured()) {
+    const indexed = await getIndexedInvocations(contractId, limit);
+    return indexed.map((i) => ({
+      txHash: i.txHash,
+      ledger: i.ledger,
+      timestamp: i.createdAt,
+      functionName: i.functionName,
+      args: Array.isArray(i.args) ? i.args.map((a) => String(a)) : undefined,
+      successful: i.successful,
+    }));
+  }
+
+  const events = await getContractEventsFromRpc(contractId, 200);
   const txHashes = Array.from(new Set(events.map((e) => e.txHash))).slice(0, limit);
 
   const items = await Promise.all(
