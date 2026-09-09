@@ -36,7 +36,7 @@ When a developer deploys a Soroban contract, they need to inspect its storage st
 ### Developer Tools
 - In-browser contract invocation (call any contract function directly from Prism)
 - ABI/interface display for verified contracts
-- XDR decoder for raw transaction data
+- XDR decoder for raw transaction data at `/xdr` — paste any base64 blob and Prism identifies the type (transaction envelope, result, meta, ledger entry/key, contract spec entry, or ScVal) before decoding it
 
 ---
 
