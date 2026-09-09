@@ -1,6 +1,6 @@
 "use server";
 
-import { coerceArgInput } from "./xdr";
+import { coerceArgInput, decodeAnyXdr, type XdrDecodeResult } from "./xdr";
 import {
   lookupStorageEntry,
   parseStorageKeyInput,
@@ -24,6 +24,22 @@ export async function lookupStorageKeyAction(
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Invalid key." };
   }
+}
+
+/**
+ * Decode a pasted base64 XDR blob. Runs server-side so the stellar-sdk XDR
+ * machinery stays out of the client bundle, matching how the rest of Prism's
+ * decoding works.
+ */
+export async function decodeXdrAction(input: string): Promise<XdrDecodeResult | { error: string }> {
+  if (!input.trim()) return { error: "Paste some base64 XDR to decode." };
+  const result = decodeAnyXdr(input);
+  return (
+    result ?? {
+      error:
+        "Not valid XDR of a type Prism recognizes (transaction envelope/result/meta, ledger entry or key, contract spec entry, or ScVal).",
+    }
+  );
 }
 
 export async function simulateInvocationAction(
