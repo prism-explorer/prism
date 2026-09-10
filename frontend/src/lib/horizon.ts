@@ -1,6 +1,7 @@
 import type { AccountRecord, LedgerRecord, TransactionRecord } from "@/types";
+import { config } from "./config";
 
-const BASE_URL = process.env.NEXT_PUBLIC_HORIZON_URL ?? "https://horizon-testnet.stellar.org";
+const BASE_URL = config.horizonUrl;
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {

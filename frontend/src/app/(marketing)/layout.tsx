@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { config } from "@/lib/config";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import "../globals.css";
 import "./landing.css";
@@ -15,7 +16,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(config.siteUrl),
   title: "Prism — Soroban block explorer",
   description:
     "See inside every Soroban contract: live storage, invocation history, events, and WASM — in one fast, open-source explorer.",

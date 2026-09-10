@@ -7,9 +7,10 @@ import type {
   StorageEntry,
 } from "@/types";
 import { decodeInvocation, parseContractSpec, scValToDisplay } from "./xdr";
+import { config } from "./config";
 import { isIndexerConfigured, getIndexedInvocations, getIndexedEvents, getIndexedStorageEntries } from "./indexed-db";
 
-const RPC_URL = process.env.NEXT_PUBLIC_SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
+const RPC_URL = config.sorobanRpcUrl;
 
 let _server: rpc.Server | undefined;
 function server(): rpc.Server {
@@ -293,7 +294,12 @@ export async function simulateInvocation(
     "@stellar/stellar-sdk"
   );
   try {
-    const network = process.env.NEXT_PUBLIC_NETWORK === "mainnet" ? Networks.PUBLIC : Networks.TESTNET;
+    const passphrases: Record<typeof config.network, string> = {
+      mainnet: Networks.PUBLIC,
+      testnet: Networks.TESTNET,
+      futurenet: Networks.FUTURENET,
+    };
+    const network = passphrases[config.network];
     const source = new Account(Keypair.random().publicKey(), "0");
     const contract = new Contract(contractId);
     const tx = new TransactionBuilder(source, { fee: BASE_FEE, networkPassphrase: network })
