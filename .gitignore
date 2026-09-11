@@ -5,3 +5,8 @@ node_modules/
 dist/
 next-env.d.ts
 *.tsbuildinfo
+
+# Rust / Soroban build output
+contracts/target/
+.soroban/
+.stellar/
