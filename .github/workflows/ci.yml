@@ -48,3 +48,24 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm test
       - run: npm run build
+
+  contracts:
+    name: Contracts Lint, Test & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+    steps:
+      - uses: actions/checkout@v4
+      # rustup reads contracts/rust-toolchain.toml, which pins the channel and
+      # pulls in the wasm target plus rustfmt and clippy.
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      # The wasm build is the one that has to succeed for a deploy, and it uses
+      # a different target and profile than the tests above.
+      - run: cargo build --release --target wasm32v1-none

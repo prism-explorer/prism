@@ -2,3 +2,6 @@
 channel = "stable"
 targets = ["wasm32v1-none"]
 profile = "minimal"
+# CI enforces both, so contributors should get them from the toolchain file
+# rather than discovering the failure after pushing.
+components = ["rustfmt", "clippy"]

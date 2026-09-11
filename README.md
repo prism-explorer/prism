@@ -66,6 +66,8 @@ When a developer deploys a Soroban contract, they need to inspect its storage st
                     └───────────────────────────────┘
 ```
 
+The repository is three parts: `frontend/` (the explorer itself), `indexer/` (an optional service described below), and `contracts/` — Soroban contracts that exist to be looked at. `contracts/showcase` deliberately uses every feature the explorer renders (all three storage durabilities, typed events, the full range of ScVal shapes in its ABI, and a function that always fails), so each panel can be verified against a contract you control instead of hunting for a mainnet one that happens to exercise it. See [contracts/README.md](./contracts/README.md) for the deploy recipe.
+
 The frontend works standalone against public RPC/Horizon endpoints — no database required. That gets you live chain state but is bounded by the RPC node's retention window (~24h) for events/history, and there's no way to enumerate a contract's storage keys via RPC at all (no such method exists). Running the optional `indexer/` service alongside it removes both limits for data observed since the indexer started: full invocation/event history and genuine storage-key enumeration, not just point lookups. It's forward-only by design — no historical backfill from before it started running.
 
 ---
@@ -101,13 +103,14 @@ This runs Postgres, the indexer (`indexer/`), and the frontend together — see 
 - [x] XDR decoder
 - [x] Docker Compose for self-hosting
 - [x] Optional indexer for full storage enumeration and unbounded history
+- [x] Showcase contract for end-to-end verification of every explorer panel
 - [ ] Mainnet deployment at prism.network
 
 ---
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to get started. Frontend, RPC integration, and indexer contributions are all needed.
+Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to get started. Frontend, RPC integration, indexer, and Soroban contract contributions are all needed.
 
 ## License
 
