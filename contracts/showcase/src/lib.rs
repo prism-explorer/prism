@@ -171,12 +171,7 @@ impl Showcase {
     /// Emits `NoteWritten`, whose topics are the event name, the note name and
     /// the author — three topics, which is what makes topic filtering worth
     /// testing against something real.
-    pub fn put_note(
-        env: Env,
-        author: Address,
-        name: Symbol,
-        body: String,
-    ) -> Result<u32, Error> {
+    pub fn put_note(env: Env, author: Address, name: Symbol, body: String) -> Result<u32, Error> {
         author.require_auth();
         if body.len() > MAX_NOTE_LEN {
             return Err(Error::NoteTooLong);
@@ -317,3 +312,5 @@ impl Showcase {
         Err(Error::Deliberate)
     }
 }
+
+mod test;
