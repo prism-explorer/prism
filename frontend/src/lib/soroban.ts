@@ -6,7 +6,7 @@ import type {
   InvocationHistoryItem,
   StorageEntry,
 } from "@/types";
-import { decodeInvocation, parseContractSpec, scValToDisplay } from "./xdr";
+import { decodeInvocation, parseContractEvents, parseContractSpec, scValToDisplay } from "./xdr";
 import { config } from "./config";
 import { isIndexerConfigured, getIndexedInvocations, getIndexedEvents, getIndexedStorageEntries } from "./indexed-db";
 
@@ -117,6 +117,7 @@ export async function getContractWasmInfo(contractId: string): Promise<ContractW
     return {
       size: wasm.length,
       functions: parseContractSpec(wasm),
+      events: parseContractEvents(wasm),
     };
   } catch {
     return null;

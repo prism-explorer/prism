@@ -59,7 +59,7 @@ export default async function ContractPage({ params }: Props) {
             Events
             <LiveBadge />
           </h2>
-          <LiveEventLog contractId={contractId} initialEvents={events} />
+          <LiveEventLog contractId={contractId} initialEvents={events} specs={wasm?.events} />
         </section>
       </div>
     </div>

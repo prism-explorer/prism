@@ -84,9 +84,20 @@ export interface ContractFunctionSpec {
   outputs: string[];
 }
 
+/** An event the contract declares in its spec, as emitted by #[contractevent]. */
+export interface ContractEventSpec {
+  name: string;
+  prefixTopics: string[];
+  params: { name: string; type: string; location: "topic" | "data" }[];
+  dataFormat: "map" | "vec" | "single-value";
+  doc?: string;
+}
+
 export interface ContractWasmInfo {
   size: number;
   functions: ContractFunctionSpec[];
+  /** Empty for contracts that publish events as loose tuples rather than declaring them. */
+  events: ContractEventSpec[];
 }
 
 /** A Soroban invocation decoded from a transaction's InvokeHostFunction operation. */

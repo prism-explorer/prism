@@ -198,43 +198,6 @@ export function parseContractEvents(wasm: Buffer): ParsedEventSpec[] {
   }
 }
 
-/**
- * Find the declaration an emitted event's topics correspond to.
- *
- * Events are matched on their fixed prefix topics, which is the only part of an
- * event that's guaranteed identical across every instance. An event needs at
- * least as many topics as the declaration's prefix plus its topic params,
- * otherwise it's a different event that happens to share a name.
- */
-export function matchEventSpec(
-  topics: string[],
-  specs: ParsedEventSpec[]
-): ParsedEventSpec | undefined {
-  return specs.find((spec) => {
-    const topicParams = spec.params.filter((p) => p.location === "topic").length;
-    if (topics.length !== spec.prefixTopics.length + topicParams) return false;
-    return spec.prefixTopics.every((topic, i) => topics[i] === topic);
-  });
-}
-
-/**
- * Pair an emitted event's topics with the names its declaration gives them.
- * The fixed prefix topics are dropped — they're the event's name, shown
- * separately — leaving only the fields that vary per instance.
- */
-export function labelEventTopics(
-  topics: string[],
-  spec: ParsedEventSpec
-): { name: string; type: string; value: string }[] {
-  return spec.params
-    .filter((p) => p.location === "topic")
-    .map((param, i) => ({
-      name: param.name,
-      type: param.type,
-      value: topics[spec.prefixTopics.length + i] ?? "",
-    }));
-}
-
 function unwrapTx(envelope: xdr.TransactionEnvelope) {
   return envelope.switch().name === "envelopeTypeTxFeeBump"
     ? envelope.feeBump().tx().innerTx().v1().tx()

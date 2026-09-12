@@ -2,11 +2,22 @@
 
 import { useEffect, useState } from "react";
 import EventLog from "./EventLog";
-import type { ContractEvent } from "@/types";
+import type { ContractEvent, ContractEventSpec } from "@/types";
 
-interface Props { contractId: string; initialEvents: ContractEvent[]; intervalMs?: number }
+interface Props {
+  contractId: string;
+  initialEvents: ContractEvent[];
+  /** Event declarations from the contract spec, used to name and label events. */
+  specs?: ContractEventSpec[];
+  intervalMs?: number;
+}
 
-export default function LiveEventLog({ contractId, initialEvents, intervalMs = 15_000 }: Props) {
+export default function LiveEventLog({
+  contractId,
+  initialEvents,
+  specs,
+  intervalMs = 15_000,
+}: Props) {
   const [events, setEvents] = useState(initialEvents);
 
   useEffect(() => {
@@ -23,5 +34,5 @@ export default function LiveEventLog({ contractId, initialEvents, intervalMs = 1
     return () => clearInterval(id);
   }, [contractId, intervalMs]);
 
-  return <EventLog events={events} />;
+  return <EventLog events={events} specs={specs} />;
 }

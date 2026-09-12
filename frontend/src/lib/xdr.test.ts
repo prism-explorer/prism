@@ -10,10 +10,9 @@ import {
   identifyXdr,
   decodeAnyXdr,
   parseContractEvents,
-  matchEventSpec,
-  labelEventTopics,
   type ParsedEventSpec,
 } from "./xdr";
+import { labelEventTopics, matchEventSpec } from "./event-spec";
 
 describe("decodeScVal / scValToDisplay", () => {
   it("decodes a u32", () => {
