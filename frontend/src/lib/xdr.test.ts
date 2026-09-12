@@ -9,6 +9,10 @@ import {
   parseContractSpec,
   identifyXdr,
   decodeAnyXdr,
+  parseContractEvents,
+  matchEventSpec,
+  labelEventTopics,
+  type ParsedEventSpec,
 } from "./xdr";
 
 describe("decodeScVal / scValToDisplay", () => {
@@ -174,5 +178,181 @@ describe("decodeAnyXdr", () => {
 
   it("returns null for input that isn't XDR", () => {
     expect(decodeAnyXdr("not valid xdr")).toBeNull();
+  });
+});
+
+/** Unsigned LEB128, the length encoding WASM section headers use. */
+function leb128(value: number): Buffer {
+  const bytes: number[] = [];
+  let remaining = value;
+  do {
+    let byte = remaining & 0x7f;
+    remaining >>>= 7;
+    if (remaining !== 0) byte |= 0x80;
+    bytes.push(byte);
+  } while (remaining !== 0);
+  return Buffer.from(bytes);
+}
+
+/**
+ * Build a minimal WASM module carrying the given spec entries in a
+ * "contractspecv0" custom section — the same shape soroban-sdk emits, without
+ * needing a Rust toolchain to produce one.
+ */
+function wasmWithSpec(entries: xdr.ScSpecEntry[]): Buffer {
+  const name = Buffer.from("contractspecv0");
+  const body = Buffer.concat([
+    leb128(name.length),
+    name,
+    ...entries.map((e) => Buffer.from(e.toXDR())),
+  ]);
+  return Buffer.concat([
+    Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]), // magic + version
+    Buffer.from([0x00]), // custom section id
+    leb128(body.length),
+    body,
+  ]);
+}
+
+function eventParam(
+  name: string,
+  type: xdr.ScSpecTypeDef,
+  location: "topic" | "data"
+): xdr.ScSpecEventParamV0 {
+  return new xdr.ScSpecEventParamV0({
+    doc: "",
+    name,
+    type,
+    location:
+      location === "topic"
+        ? xdr.ScSpecEventParamLocationV0.scSpecEventParamLocationTopicList()
+        : xdr.ScSpecEventParamLocationV0.scSpecEventParamLocationData(),
+  });
+}
+
+/** Mirrors the showcase contract's NoteWritten event. */
+function noteWrittenEntry(): xdr.ScSpecEntry {
+  return xdr.ScSpecEntry.scSpecEntryEventV0(
+    new xdr.ScSpecEventV0({
+      doc: "Two indexed topics plus data.",
+      lib: "",
+      name: "NoteWritten",
+      prefixTopics: ["note_written"],
+      params: [
+        eventParam("name", xdr.ScSpecTypeDef.scSpecTypeSymbol(), "topic"),
+        eventParam("author", xdr.ScSpecTypeDef.scSpecTypeAddress(), "topic"),
+        eventParam("revision", xdr.ScSpecTypeDef.scSpecTypeU32(), "data"),
+      ],
+      dataFormat: xdr.ScSpecEventDataFormat.scSpecEventDataFormatMap(),
+    })
+  );
+}
+
+/**
+ * Modelled on the showcase contract's Bumped event — no indexed fields — but
+ * declared single-value rather than the default map, to cover that mapping.
+ */
+function bumpedEntry(): xdr.ScSpecEntry {
+  return xdr.ScSpecEntry.scSpecEntryEventV0(
+    new xdr.ScSpecEventV0({
+      doc: "",
+      lib: "",
+      name: "Bumped",
+      prefixTopics: ["bumped"],
+      params: [eventParam("counter", xdr.ScSpecTypeDef.scSpecTypeU32(), "data")],
+      dataFormat: xdr.ScSpecEventDataFormat.scSpecEventDataFormatSingleValue(),
+    })
+  );
+}
+
+describe("parseContractEvents", () => {
+  it("parses a declared event's name, topics, params and data format", () => {
+    const [event] = parseContractEvents(wasmWithSpec([noteWrittenEntry()]));
+
+    expect(event.name).toBe("NoteWritten");
+    expect(event.prefixTopics).toEqual(["note_written"]);
+    expect(event.dataFormat).toBe("map");
+    expect(event.doc).toBe("Two indexed topics plus data.");
+    expect(event.params).toEqual([
+      { name: "name", type: "Symbol", location: "topic" },
+      { name: "author", type: "Address", location: "topic" },
+      { name: "revision", type: "U32", location: "data" },
+    ]);
+  });
+
+  it("distinguishes the data formats", () => {
+    const [event] = parseContractEvents(wasmWithSpec([bumpedEntry()]));
+    expect(event.dataFormat).toBe("single-value");
+    expect(event.params.every((p) => p.location === "data")).toBe(true);
+  });
+
+  it("omits an absent doc comment rather than reporting an empty string", () => {
+    const [event] = parseContractEvents(wasmWithSpec([bumpedEntry()]));
+    expect(event.doc).toBeUndefined();
+  });
+
+  it("reads events and functions from the same spec section", () => {
+    const wasm = wasmWithSpec([noteWrittenEntry(), bumpedEntry()]);
+    expect(parseContractEvents(wasm).map((e) => e.name)).toEqual(["NoteWritten", "Bumped"]);
+    // Function parsing must ignore the event entries, not choke on them.
+    expect(parseContractSpec(wasm)).toEqual([]);
+  });
+
+  it("returns an empty array for a contract with no spec section", () => {
+    const emptyModule = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    expect(parseContractEvents(emptyModule)).toEqual([]);
+    expect(parseContractEvents(Buffer.from("not wasm"))).toEqual([]);
+  });
+});
+
+describe("matchEventSpec / labelEventTopics", () => {
+  const specs: ParsedEventSpec[] = [
+    {
+      name: "NoteWritten",
+      prefixTopics: ["note_written"],
+      params: [
+        { name: "name", type: "Symbol", location: "topic" },
+        { name: "author", type: "Address", location: "topic" },
+        { name: "revision", type: "U32", location: "data" },
+      ],
+      dataFormat: "map",
+    },
+    {
+      name: "Bumped",
+      prefixTopics: ["bumped"],
+      params: [{ name: "counter", type: "U32", location: "data" }],
+      dataFormat: "single-value",
+    },
+  ];
+
+  it("matches an emitted event to its declaration by prefix topic", () => {
+    const match = matchEventSpec(["note_written", "hello", "GABC"], specs);
+    expect(match?.name).toBe("NoteWritten");
+  });
+
+  it("matches an event that carries only its name topic", () => {
+    expect(matchEventSpec(["bumped"], specs)?.name).toBe("Bumped");
+  });
+
+  it("returns undefined for an event the contract never declared", () => {
+    expect(matchEventSpec(["transfer", "GABC"], specs)).toBeUndefined();
+    expect(matchEventSpec([], specs)).toBeUndefined();
+  });
+
+  it("rejects a topic count that doesn't match the declaration", () => {
+    // Right prefix, wrong arity — a different event, not this one.
+    expect(matchEventSpec(["note_written", "hello"], specs)).toBeUndefined();
+    expect(matchEventSpec(["note_written", "hello", "GABC", "extra"], specs)).toBeUndefined();
+  });
+
+  it("labels the topics that vary, dropping the event's name topic", () => {
+    expect(labelEventTopics(["note_written", "hello", "GABC"], specs[0])).toEqual([
+      { name: "name", type: "Symbol", value: "hello" },
+      { name: "author", type: "Address", value: "GABC" },
+    ]);
+  });
+
+  it("labels nothing for an event with no indexed fields", () => {
+    expect(labelEventTopics(["bumped"], specs[1])).toEqual([]);
   });
 });

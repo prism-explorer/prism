@@ -88,12 +88,29 @@ export interface ParsedFunctionSpec {
   outputs: string[];
 }
 
+/** One field of a declared event, and whether it rides in the topic list or the data payload. */
+export interface EventParamSpec {
+  name: string;
+  type: string;
+  location: "topic" | "data";
+}
+
+export interface ParsedEventSpec {
+  /** The Rust type name, e.g. "NoteWritten". */
+  name: string;
+  /** Fixed leading topics every instance of this event carries, e.g. ["note_written"]. */
+  prefixTopics: string[];
+  params: EventParamSpec[];
+  dataFormat: "map" | "vec" | "single-value";
+  doc?: string;
+}
+
 /**
- * Extract and parse a contract's embedded spec (ABI) from its WASM binary's
- * "contractspecv0" custom section. Not every contract embeds one (e.g. ones
- * built without the spec-emitting macros) — returns [] when absent or unparsable.
+ * Read every spec entry out of a contract's "contractspecv0" custom section.
+ * Returns [] when the section is missing or unparsable — not every contract
+ * embeds one (e.g. ones built without the spec-emitting macros).
  */
-export function parseContractSpec(wasm: Buffer): ParsedFunctionSpec[] {
+function readSpecEntries(wasm: Buffer): xdr.ScSpecEntry[] {
   try {
     const mod = new WebAssembly.Module(new Uint8Array(wasm));
     const sections = WebAssembly.Module.customSections(mod, "contractspecv0");
@@ -109,8 +126,19 @@ export function parseContractSpec(wasm: Buffer): ParsedFunctionSpec[] {
         entries.push(xdr.ScSpecEntry.read(reader as unknown as Buffer));
       }
     }
+    return entries;
+  } catch {
+    return [];
+  }
+}
 
-    return entries
+/**
+ * Parse the functions a contract exposes from its embedded spec (ABI).
+ * Returns [] when the contract embeds no spec.
+ */
+export function parseContractSpec(wasm: Buffer): ParsedFunctionSpec[] {
+  try {
+    return readSpecEntries(wasm)
       .filter((e) => e.switch().name === "scSpecEntryFunctionV0")
       .map((e) => {
         const fn = e.functionV0();
@@ -126,6 +154,85 @@ export function parseContractSpec(wasm: Buffer): ParsedFunctionSpec[] {
   } catch {
     return [];
   }
+}
+
+const EVENT_DATA_FORMATS: Record<string, ParsedEventSpec["dataFormat"]> = {
+  scSpecEventDataFormatMap: "map",
+  scSpecEventDataFormatVec: "vec",
+  scSpecEventDataFormatSingleValue: "single-value",
+};
+
+/**
+ * Parse the events a contract declares in its spec.
+ *
+ * Contracts built with soroban-sdk 25's `#[contractevent]` macro publish their
+ * event schemas alongside their functions, which is what lets an explorer name
+ * an event and label its fields instead of showing an anonymous list of ScVals.
+ * Contracts that publish events as loose tuples declare nothing, so this
+ * legitimately returns [] for most contracts in the wild.
+ */
+export function parseContractEvents(wasm: Buffer): ParsedEventSpec[] {
+  try {
+    return readSpecEntries(wasm)
+      .filter((e) => e.switch().name === "scSpecEntryEventV0")
+      .map((e) => {
+        const event = e.eventV0();
+        const doc = event.doc().toString();
+        return {
+          name: event.name().toString(),
+          prefixTopics: event.prefixTopics().map((t) => t.toString()),
+          params: event.params().map((param) => ({
+            name: param.name().toString(),
+            type: specTypeToString(param.type()),
+            location:
+              param.location().name === "scSpecEventParamLocationTopicList"
+                ? ("topic" as const)
+                : ("data" as const),
+          })),
+          dataFormat: EVENT_DATA_FORMATS[event.dataFormat().name] ?? "map",
+          doc: doc || undefined,
+        };
+      });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Find the declaration an emitted event's topics correspond to.
+ *
+ * Events are matched on their fixed prefix topics, which is the only part of an
+ * event that's guaranteed identical across every instance. An event needs at
+ * least as many topics as the declaration's prefix plus its topic params,
+ * otherwise it's a different event that happens to share a name.
+ */
+export function matchEventSpec(
+  topics: string[],
+  specs: ParsedEventSpec[]
+): ParsedEventSpec | undefined {
+  return specs.find((spec) => {
+    const topicParams = spec.params.filter((p) => p.location === "topic").length;
+    if (topics.length !== spec.prefixTopics.length + topicParams) return false;
+    return spec.prefixTopics.every((topic, i) => topics[i] === topic);
+  });
+}
+
+/**
+ * Pair an emitted event's topics with the names its declaration gives them.
+ * The fixed prefix topics are dropped — they're the event's name, shown
+ * separately — leaving only the fields that vary per instance.
+ */
+export function labelEventTopics(
+  topics: string[],
+  spec: ParsedEventSpec
+): { name: string; type: string; value: string }[] {
+  return spec.params
+    .filter((p) => p.location === "topic")
+    .map((param, i) => ({
+      name: param.name,
+      type: param.type,
+      value: topics[spec.prefixTopics.length + i] ?? "",
+    }));
 }
 
 function unwrapTx(envelope: xdr.TransactionEnvelope) {
