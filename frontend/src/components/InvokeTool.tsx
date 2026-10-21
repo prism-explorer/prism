@@ -60,11 +60,11 @@ export default function InvokeTool({ contractId, functions, types = [] }: Props)
           <div className="space-y-2">
             {fn.inputs.map((input) => (
               <div key={input.name} className="flex items-center gap-2">
-                <label className="text-xs font-mono text-prism-muted w-32 shrink-0 truncate">
+                <label htmlFor={`invoke-${fn.name}-${input.name}`} className="text-xs font-mono text-prism-muted w-32 shrink-0 truncate">
                   {input.name}: {input.type}
                 </label>
                 <input
-                  value={values[input.name] ?? ""}
+                  id={`invoke-${fn.name}-${input.name}`}\r\n                  value={values[input.name] ?? ""}
                   onChange={(e) => setValues((v) => ({ ...v, [input.name]: e.target.value }))}
                   className="flex-1 bg-prism-bg border border-prism-border rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-prism-accent"
                   placeholder={placeholderFor(input.type, types)}
