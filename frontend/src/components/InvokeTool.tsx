@@ -64,7 +64,8 @@ export default function InvokeTool({ contractId, functions, types = [] }: Props)
                   {input.name}: {input.type}
                 </label>
                 <input
-                  id={`invoke-${fn.name}-${input.name}`}\r\n                  value={values[input.name] ?? ""}
+                  id={`invoke-${fn.name}-${input.name}`}
+                  value={values[input.name] ?? ""}
                   onChange={(e) => setValues((v) => ({ ...v, [input.name]: e.target.value }))}
                   className="flex-1 bg-prism-bg border border-prism-border rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-prism-accent"
                   placeholder={placeholderFor(input.type, types)}
