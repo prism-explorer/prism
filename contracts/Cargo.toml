@@ -3,7 +3,7 @@ resolver = "2"
 members = ["showcase"]
 
 [workspace.dependencies]
-soroban-sdk = "25"
+soroban-sdk = "29"
 
 [profile.release]
 opt-level = "z"
