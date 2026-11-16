@@ -124,7 +124,7 @@ export async function getLedger(sequence: number): Promise<LedgerRecord> {
 }
 
 export async function getTransaction(hash: string): Promise<TransactionRecord> {
-  const data = await get<HorizonTransaction>(`/transactions/${hash}`, REVALIDATE_FINALIZED);
+  const data = await get<HorizonTransaction>(`/transactions/${encodeURIComponent(hash)}`, REVALIDATE_FINALIZED);
   return mapTransaction(data);
 }
 

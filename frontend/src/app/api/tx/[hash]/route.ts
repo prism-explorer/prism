@@ -4,12 +4,18 @@ import { getTransaction } from "@/lib/horizon";
 import { getInvocationReturnValue } from "@/lib/soroban";
 import { decodeInvocation, getResourceUsage } from "@/lib/xdr";
 import { rateLimitAsync, getClientKey } from "@/lib/rate-limit";
+import { normalizeTransactionHash } from "@/lib/transaction-hash";
 
 export const dynamic = "force-dynamic";
 
 interface Params { params: { hash: string } }
 
 export async function GET(req: Request, { params }: Params) {
+  const hash = normalizeTransactionHash(params.hash);
+  if (hash === null) {
+    return NextResponse.json({ error: "Invalid transaction hash" }, { status: 400 });
+  }
+
   const key = `tx:${getClientKey(req)}`;
   const limitResult = await rateLimitAsync(key, 30, 60_000);
   if (!limitResult.success) {
@@ -21,7 +27,7 @@ export async function GET(req: Request, { params }: Params) {
 
   let tx;
   try {
-    tx = await getTransaction(params.hash);
+    tx = await getTransaction(hash);
   } catch {
     return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
   }

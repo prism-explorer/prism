@@ -8,18 +8,21 @@ import { decodeInvocations, decodeTransactionFailure, getResourceUsage } from "@
 import { formatDate, formatFee, stroopsToXlm, formatNumber } from "@/lib/format";
 import { notFound } from "next/navigation";
 import DetailRow from "@/components/DetailRow";
+import { normalizeTransactionHash } from "@/lib/transaction-hash";
 
 export const dynamic = "force-dynamic";
 
 interface Props { params: { hash: string } }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const shortHash = `${params.hash.slice(0, 8)}…${params.hash.slice(-8)}`;
+  const hash = normalizeTransactionHash(params.hash);
+  if (hash === null) notFound();
+  const shortHash = `${hash.slice(0, 8)}…${hash.slice(-8)}`;
   try {
-    const tx = await getTransaction(params.hash);
+    const tx = await getTransaction(hash);
     const status = tx.successful ? "Success" : "Failed";
     const title = `Transaction ${shortHash} — ${status}`;
-    const description = `Stellar transaction ${params.hash}: ${status}, ledger ${tx.ledger}, ${tx.operationCount} operation${tx.operationCount === 1 ? "" : "s"}, fee ${stroopsToXlm(tx.fee)}.`;
+    const description = `Stellar transaction ${hash}: ${status}, ledger ${tx.ledger}, ${tx.operationCount} operation${tx.operationCount === 1 ? "" : "s"}, fee ${stroopsToXlm(tx.fee)}.`;
     return {
       title,
       description,
@@ -28,7 +31,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   } catch {
     const title = `Transaction ${shortHash}`;
-    const description = `Stellar transaction ${params.hash}.`;
+    const description = `Stellar transaction ${hash}.`;
     return {
       title,
       description,
@@ -39,9 +42,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function TxPage({ params }: Props) {
+  const hash = normalizeTransactionHash(params.hash);
+  if (hash === null) notFound();
   let tx;
   try {
-    tx = await getTransaction(params.hash);
+    tx = await getTransaction(hash);
   } catch (err) {
     if (isNotFound(err)) notFound();
     throw err;
@@ -72,8 +77,8 @@ export default async function TxPage({ params }: Props) {
     <div>
       <h1 className="text-2xl font-bold mb-1">Transaction</h1>
       <div className="flex items-start gap-2 mb-8">
-        <p className="text-prism-muted font-mono text-sm break-all">{params.hash}</p>
-        <CopyButton value={params.hash} what="transaction hash" />
+        <p className="text-prism-muted font-mono text-sm break-all">{hash}</p>
+        <CopyButton value={hash} what="transaction hash" />
       </div>
 
       <div className="rounded-xl border border-prism-border bg-prism-surface p-6 space-y-4">
