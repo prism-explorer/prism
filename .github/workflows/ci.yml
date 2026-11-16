@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main]
 
+# CI only reads repository content; do not grant a write-scoped workflow token.
+permissions:
+  contents: read
+
+# Repeated pushes should not consume runners testing superseded commits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
     name: Frontend Type Check & Build

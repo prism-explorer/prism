@@ -3,6 +3,11 @@ version: 2
 # Weekly update pull requests, one per ecosystem and directory. Each group
 # bundles all of that directory's updates into a single pull request.
 updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
   - package-ecosystem: npm
     directory: /frontend
     schedule:
