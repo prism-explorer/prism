@@ -29,14 +29,40 @@ export interface PrismConfig {
   horizonUrl: string;
   sorobanRpcUrl: string;
   siteUrl: string;
+  /**
+   * Trimmed NEXT_PUBLIC_NETWORK when it was set to something this build does
+   * not recognize. Null when the variable is unset, blank, or a known name.
+   * The explorer still falls back to testnet; this is only so the banner can
+   * name the ignored value.
+   */
+  unrecognizedNetwork: string | null;
 }
 
-/** Coerce a raw NEXT_PUBLIC_NETWORK value to a known network, defaulting to testnet. */
+const NETWORK_ALIASES: Record<string, StellarNetwork> = {
+  testnet: "testnet",
+  mainnet: "mainnet",
+  public: "mainnet",
+  pubnet: "mainnet",
+  futurenet: "futurenet",
+};
+
+/**
+ * Coerce a raw NEXT_PUBLIC_NETWORK value to a known network, defaulting to
+ * testnet. A typo such as "mainet" also falls back to testnet; configWarnings
+ * reports that case so the fallback is not silent.
+ */
 export function parseNetwork(raw: string | undefined): StellarNetwork {
   const value = raw?.trim().toLowerCase();
-  if (value === "mainnet" || value === "public" || value === "pubnet") return "mainnet";
-  if (value === "futurenet") return "futurenet";
-  return "testnet";
+  if (!value) return "testnet";
+  return NETWORK_ALIASES[value] ?? "testnet";
+}
+
+/** The trimmed raw value when it is set but not a known network name. */
+function unrecognizedNetworkValue(raw: string | undefined): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+  if (NETWORK_ALIASES[trimmed.toLowerCase()]) return null;
+  return trimmed;
 }
 
 type EnvLike = Record<string, string | undefined>;
@@ -56,6 +82,7 @@ export function resolveConfig(env: EnvLike): PrismConfig {
     horizonUrl: (env.NEXT_PUBLIC_HORIZON_URL || defaults.horizon).replace(/\/+$/, ""),
     sorobanRpcUrl: (env.NEXT_PUBLIC_SOROBAN_RPC_URL || defaults.rpc).replace(/\/+$/, ""),
     siteUrl: env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+    unrecognizedNetwork: unrecognizedNetworkValue(env.NEXT_PUBLIC_NETWORK),
   };
 }
 
@@ -79,13 +106,23 @@ export function detectNetworkFromUrl(url: string): StellarNetwork | null {
 }
 
 /**
- * Detect endpoints that disagree with the configured network. A mismatch is
- * quietly destructive: contract simulation is signed with the configured
- * network's passphrase while the data on screen comes from whatever the
- * endpoints actually serve, so every result looks plausible and is wrong.
+ * Detect configuration that would quietly point the explorer at the wrong
+ * network. An endpoint mismatch is destructive: contract simulation is signed
+ * with the configured network's passphrase while the data on screen comes
+ * from whatever the endpoints actually serve, so every result looks plausible
+ * and is wrong. An unrecognized NEXT_PUBLIC_NETWORK is the same kind of
+ * mistake: the value is ignored and the explorer falls back to testnet, so
+ * the banner names what was actually set.
  */
 export function configWarnings(cfg: PrismConfig): string[] {
   const warnings: string[] = [];
+
+  if (cfg.unrecognizedNetwork) {
+    warnings.push(
+      `NEXT_PUBLIC_NETWORK is set to "${cfg.unrecognizedNetwork}", which is not a known network. Falling back to ${cfg.network}.`
+    );
+  }
+
   const checks: [label: string, url: string][] = [
     ["Horizon", cfg.horizonUrl],
     ["Soroban RPC", cfg.sorobanRpcUrl],

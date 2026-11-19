@@ -110,4 +110,18 @@ describe("configWarnings", () => {
     });
     expect(configWarnings(cfg)).toEqual([]);
   });
+
+  it("names an unrecognized NEXT_PUBLIC_NETWORK instead of failing silently", () => {
+    const cfg = resolveConfig({ NEXT_PUBLIC_NETWORK: "mainet" });
+    expect(cfg.network).toBe("testnet");
+    expect(configWarnings(cfg)).toEqual([
+      'NEXT_PUBLIC_NETWORK is set to "mainet", which is not a known network. Falling back to testnet.',
+    ]);
+  });
+
+  it("does not warn when NEXT_PUBLIC_NETWORK is unset or blank", () => {
+    expect(configWarnings(resolveConfig({}))).toEqual([]);
+    expect(configWarnings(resolveConfig({ NEXT_PUBLIC_NETWORK: "" }))).toEqual([]);
+    expect(configWarnings(resolveConfig({ NEXT_PUBLIC_NETWORK: "   " }))).toEqual([]);
+  });
 });

@@ -1,10 +1,12 @@
 import { config, configWarnings } from "@/lib/config";
 
 /**
- * Warn when the configured network disagrees with the endpoints actually being
- * queried. This failure mode is silent and misleading rather than loud: pages
- * render fine with data from one network while simulation signs against
- * another's passphrase, so every number on screen looks plausible.
+ * Warn when deployment config would quietly point Prism at the wrong network:
+ * an endpoint that disagrees with NEXT_PUBLIC_NETWORK, or a NEXT_PUBLIC_NETWORK
+ * value that is not a known network and was ignored in favor of the default.
+ * This failure mode is silent and misleading rather than loud: pages render
+ * fine with data from one network while simulation signs against another's
+ * passphrase, so every number on screen looks plausible.
  *
  * Renders nothing on a coherent deployment, which is the common case.
  */
