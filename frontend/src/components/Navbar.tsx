@@ -31,7 +31,7 @@ export default function Navbar() {
           </span>
         </Link>
         <div className="flex-1 min-w-0 w-full sm:w-auto order-last sm:order-none">
-          <SearchBar />
+          <SearchBar shortcut />
         </div>
         <div className="flex gap-5 text-sm text-prism-muted shrink-0">
           <Link href="/explorer" className="hover:text-prism-strong transition">Home</Link>

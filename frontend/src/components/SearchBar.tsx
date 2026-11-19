@@ -3,25 +3,27 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { resolveSearchRoute } from "@/lib/search";
+import { attachSearchShortcut } from "@/lib/search-shortcut";
 
-interface Props { initialValue?: string }
+interface Props {
+  initialValue?: string;
+  /**
+   * Own the "/" shortcut. Home, search, and not-found render a second
+   * SearchBar under the navbar, and each listener focuses its own input, so
+   * "/" lands on whichever one mounted last. Only the navbar sets this.
+   */
+  shortcut?: boolean;
+}
 
-export default function SearchBar({ initialValue = "" }: Props) {
+export default function SearchBar({ initialValue = "", shortcut = false }: Props) {
   const [query, setQuery] = useState(initialValue);
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key !== "/") return;
-      const tag = (e.target as HTMLElement).tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      e.preventDefault();
-      inputRef.current?.focus();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+    if (!shortcut) return;
+    return attachSearchShortcut(document, () => inputRef.current?.focus());
+  }, [shortcut]);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
