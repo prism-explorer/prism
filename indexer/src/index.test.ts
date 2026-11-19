@@ -1,5 +1,35 @@
+import { spawnSync } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { backoffDelay, commitPage, healthReport, seedLastLedger } from "./index.js";
+
+describe("SOROBAN_RPC_URL", () => {
+  it("exits at startup when the variable is not set", () => {
+    const indexerRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    const env = { ...process.env };
+    delete env.SOROBAN_RPC_URL;
+
+    const result = spawnSync(
+      process.execPath,
+      [
+        path.join(indexerRoot, "node_modules", "tsx", "dist", "cli.mjs"),
+        path.join(indexerRoot, "src", "index.ts"),
+      ],
+      {
+        cwd: indexerRoot,
+        env,
+        encoding: "utf8",
+        timeout: 30_000,
+      }
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr ?? "").toContain(
+      "[indexer] fatal: environment variable SOROBAN_RPC_URL is required but not set"
+    );
+  }, 45_000);
+});
 
 describe("backoffDelay", () => {
   it("doubles the delay for each consecutive failure", () => {
