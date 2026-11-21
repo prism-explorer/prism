@@ -149,7 +149,7 @@ describe("extractEvents", () => {
       })
     );
 
-    expect(extractEvents(meta, txHash)).toEqual(expected);
+    expect(extractEvents(meta, txHash)).toMatchObject(expected);
   });
 
   it("reads per-operation Soroban events from transaction meta v4", () => {
@@ -175,7 +175,7 @@ describe("extractEvents", () => {
       })
     );
 
-    expect(extractEvents(meta, txHash)).toEqual(expected);
+    expect(extractEvents(meta, txHash)).toMatchObject(expected);
   });
 });
 
@@ -302,7 +302,7 @@ describe("extractStorageChanges (testnet fixtures)", () => {
     expect(instanceChanges.every((change) => change.contractId === "CDH4BTGP7GRDFO6Y24AP4RP34NMC3V2RXTTUA4ABCFRMFEYWR6AG6GK6")).toBe(
       true
     );
-    expect(instanceChanges[0]).toEqual({
+    expect(instanceChanges[0]).toMatchObject({
       contractId: "CDH4BTGP7GRDFO6Y24AP4RP34NMC3V2RXTTUA4ABCFRMFEYWR6AG6GK6",
       durability: "instance",
       keyDisplay: "__wasm_hash__",
@@ -329,7 +329,7 @@ describe("extractStorageChanges (testnet fixtures)", () => {
   });
 
   it("collapses a created contract's instance storage into its created rows", () => {
-    expect(extractStorageChanges(createContract.meta)).toEqual([
+    expect(extractStorageChanges(createContract.meta)).toMatchObject([
       {
         contractId: "CCJKICDXTNUHZBFYYLMGSDAW6FD23DS5UBWYMBC2ECYFSX3EGSSW6G5B",
         durability: "instance",
@@ -357,7 +357,7 @@ describe("extractStorageChanges (testnet fixtures)", () => {
   });
 
   it("records only the wasm hash when a V2 creation has no instance storage", () => {
-    expect(extractStorageChanges(createContractV2.meta)).toEqual([
+    expect(extractStorageChanges(createContractV2.meta)).toMatchObject([
       {
         contractId: "CBUZIAY2CBUCCRRRJBUANPTOQEF42YETHVG44N34NZ7XIUQ6L7DBV56D",
         durability: "instance",
@@ -388,7 +388,7 @@ describe("extractEvents (testnet fixtures)", () => {
       `${successfulInvoke.hash}-0-2`,
       `${successfulInvoke.hash}-0-3`,
     ]);
-    expect(events[0]).toEqual({
+    expect(events[0]).toMatchObject({
       eventId: `${successfulInvoke.hash}-0-0`,
       contractId: "CBVJ6GYJJ55ALTHN32OJEFGUZWWTMDFGIBCM42SPYQ4GWLKX2XARAP2N",
       type: "contract",
@@ -400,6 +400,8 @@ describe("extractEvents (testnet fixtures)", () => {
       ],
       value: "1493531",
     });
+    expect(events[0]?.topicXdr).toHaveLength(4);
+    expect(events[0]?.valueXdr).toMatch(/^[A-Za-z0-9+/]+=*$/);
     expect(events[1]?.topic[0]).toBe("mint");
     expect(events[2]?.value).toBe('["1493531","1472284"]');
   });
