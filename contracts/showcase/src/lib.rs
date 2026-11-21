@@ -292,6 +292,16 @@ impl Showcase {
         acc
     }
 
+    pub fn echo_hash(hash: BytesN<32>) -> BytesN<32> { hash }
+
+    pub fn echo_u64(value: u64) -> u64 { value }
+
+    pub fn echo_i256(value: soroban_sdk::Int256) -> soroban_sdk::Int256 { value }
+
+    pub fn echo_tuple(value: (u32, Symbol)) -> (u32, Symbol) { value }
+
+    pub fn echo_timepoint(value: soroban_sdk::Timepoint) -> soroban_sdk::Timepoint { value }
+
     pub fn stats(env: Env) -> Result<Stats, Error> {
         Ok(Stats {
             counter: env.storage().instance().get(&DataKey::Counter).unwrap_or(0),
