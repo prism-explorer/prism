@@ -155,6 +155,8 @@ export interface IndexedEvent {
   txHash: string;
   ledger: number;
   createdAt: string;
+  topicXdr: string[];
+  valueXdr: string;
 }
 
 /**
@@ -167,7 +169,7 @@ export async function getIndexedEvents(
 ): Promise<HistoryPage<IndexedEvent>> {
   if (!isIndexerConfigured()) return { items: [], nextCursor: null };
   const { rows } = await getPool().query(
-    `SELECT id, "eventId", type, topic, value, "txHash", ledger, "createdAt"
+    `SELECT id, "eventId", type, topic, value, "topicXdr", "valueXdr", "txHash", ledger, "createdAt"
      FROM "ContractEventRecord"
      WHERE "contractId" = $1
        AND ($2::int IS NULL OR (ledger, id) < ($2::int, $3::text))
@@ -182,6 +184,8 @@ export async function getIndexedEvents(
       type: r.type,
       topic: r.topic,
       value: r.value,
+      topicXdr: r.topicXdr,
+      valueXdr: r.valueXdr,
       txHash: r.txHash,
       ledger: r.ledger,
       createdAt: r.createdAt.toISOString(),
