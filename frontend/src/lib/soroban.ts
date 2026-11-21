@@ -15,6 +15,7 @@ import {
 } from "./xdr";
 import { config } from "./config";
 import type { HistoryPage, PageRequest } from "./history-cursor";
+import { classifyStorageEntry, withStorageState } from "./storage-state";
 import { EVENT_PAGE_SIZE, INVOCATION_PAGE_SIZE } from "./contract-lists";
 import {
   isIndexerConfigured,
@@ -99,35 +100,81 @@ export function parseStorageKeyInput(raw: string, kind: StorageKeyKind): xdr.ScV
   }
 }
 
-export async function lookupStorageEntry(
-  contractId: string,
-  key: xdr.ScVal,
-  durability: "persistent" | "temporary"
-): Promise<StorageEntry | null> {
+/** Latest ledger sequence, or null when RPC can't tell us (labels stay neutral then). */
+async function latestLedgerSeq(): Promise<number | null> {
   try {
-    const entry = await server().getContractData(
-      contractId,
-      key,
-      durability === "temporary" ? rpc.Durability.Temporary : rpc.Durability.Persistent
-    );
-    return {
-      key: scValToDisplay(key),
-      value: scValToDisplay(entry.val.contractData().val()),
-      durability,
-    };
+    return (await server().getLatestLedger()).sequence;
   } catch {
     return null;
   }
 }
 
+export async function lookupStorageEntry(
+  contractId: string,
+  key: xdr.ScVal,
+  durability: "persistent" | "temporary"
+): Promise<StorageEntry | null> {
+  const keyDisplay = scValToDisplay(key);
+  try {
+    const [entry, latest] = await Promise.all([
+      server().getContractData(
+        contractId,
+        key,
+        durability === "temporary" ? rpc.Durability.Temporary : rpc.Durability.Persistent
+      ),
+      latestLedgerSeq(),
+    ]);
+    const found: StorageEntry = {
+      key: keyDisplay,
+      value: scValToDisplay(entry.val.contractData().val()),
+      durability,
+      liveUntilLedgerSeq: entry.liveUntilLedgerSeq ?? undefined,
+    };
+    return latest === null ? found : withStorageState(found, latest);
+  } catch {
+    // getContractData throws for entries past their TTL, which looks identical
+    // to a key that never existed. If the indexer saw the key, report its last
+    // observation with the expired/archived label instead of "not found".
+    if (!isIndexerConfigured()) return null;
+    const indexed = await getIndexedStorageEntries(contractId);
+    const match = indexed.find(
+      (e) => e.keyDisplay === keyDisplay && e.durability === durability
+    );
+    if (!match) return null;
+    const latest = await latestLedgerSeq();
+    if (
+      latest === null ||
+      classifyStorageEntry(durability, match.liveUntilLedger, latest) === "live"
+    ) {
+      return null;
+    }
+    return withStorageState(
+      {
+        key: keyDisplay,
+        value: match.valueDisplay,
+        durability,
+        liveUntilLedgerSeq: match.liveUntilLedger ?? undefined,
+      },
+      latest
+    );
+  }
+}
+
 export async function getFullStorageEntries(contractId: string): Promise<StorageEntry[]> {
   if (!isIndexerConfigured()) return [];
-  const indexed = await getIndexedStorageEntries(contractId);
-  return indexed.map((e) => ({
-    key: e.keyDisplay,
-    value: e.valueDisplay,
-    durability: e.durability as StorageEntry["durability"],
-  }));
+  const [indexed, latest] = await Promise.all([
+    getIndexedStorageEntries(contractId),
+    latestLedgerSeq(),
+  ]);
+  return indexed.map((e) => {
+    const entry: StorageEntry = {
+      key: e.keyDisplay,
+      value: e.valueDisplay,
+      durability: e.durability as StorageEntry["durability"],
+      liveUntilLedgerSeq: e.liveUntilLedger ?? undefined,
+    };
+    return latest === null ? entry : withStorageState(entry, latest);
+  });
 }
 
 /**

@@ -14,8 +14,10 @@ import {
   getContractEvents,
   getContractEventsPage,
   getContractInfo,
+  getFullStorageEntries,
   getInvocationHistory,
   getInvocationReturnValue,
+  lookupStorageEntry,
   simulateInvocation,
 } from "./soroban";
 import {
@@ -23,11 +25,16 @@ import {
   getIndexedEvents,
   getIndexedInvocationReturnValue,
   getIndexedInvocations,
+  getIndexedStorageEntries,
   isIndexerConfigured,
 } from "./indexed-db";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.mocked(isIndexerConfigured).mockReset();
+  vi.mocked(getIndexedEvents).mockReset();
+  vi.mocked(getIndexedInvocations).mockReset();
+  vi.mocked(getIndexedStorageEntries).mockReset();
   vi.clearAllMocks();
 });
 
@@ -105,6 +112,73 @@ describe("getContractInfo", () => {
       creator: "GCREATOR",
       deploymentLedger: 88,
     });
+  });
+});
+
+describe("storage TTL state", () => {
+  const indexedEntry = (overrides: Partial<{
+    keyDisplay: string;
+    valueDisplay: string;
+    durability: string;
+    ledger: number;
+    liveUntilLedger: number | null;
+  }> = {}) => ({
+    keyDisplay: "session",
+    valueDisplay: "7",
+    durability: "temporary",
+    ledger: 80,
+    liveUntilLedger: 90,
+    ...overrides,
+  });
+
+  it("labels indexed entries by TTL against the latest ledger", async () => {
+    vi.mocked(isIndexerConfigured).mockReturnValue(true);
+    vi.mocked(getIndexedStorageEntries).mockResolvedValue([
+      indexedEntry(),
+      indexedEntry({ keyDisplay: "counter", durability: "persistent", valueDisplay: "3", liveUntilLedger: 200 }),
+    ]);
+    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({ sequence: 100 } as never);
+
+    await expect(getFullStorageEntries("contract-id")).resolves.toEqual([
+      { key: "session", value: "7", durability: "temporary", liveUntilLedgerSeq: 90, state: "expired" },
+      { key: "counter", value: "3", durability: "persistent", liveUntilLedgerSeq: 200, state: "live" },
+    ]);
+  });
+
+  it("labels an archived persistent entry as restorable", async () => {
+    vi.mocked(isIndexerConfigured).mockReturnValue(true);
+    vi.mocked(getIndexedStorageEntries).mockResolvedValue([
+      indexedEntry({ durability: "persistent", liveUntilLedger: 50 }),
+    ]);
+    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({ sequence: 100 } as never);
+
+    await expect(getFullStorageEntries("contract-id")).resolves.toEqual([
+      { key: "session", value: "7", durability: "persistent", liveUntilLedgerSeq: 50, state: "archived" },
+    ]);
+  });
+
+  it("labels a live RPC lookup with its TTL", async () => {
+    vi.mocked(isIndexerConfigured).mockReturnValue(false);
+    vi.spyOn(rpc.Server.prototype, "getContractData").mockResolvedValue({
+      val: { contractData: () => ({ val: () => nativeToScVal(7, { type: "u32" }) }) },
+      liveUntilLedgerSeq: 200,
+    } as never);
+    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({ sequence: 100 } as never);
+
+    await expect(
+      lookupStorageEntry("contract-id", nativeToScVal("session", { type: "symbol" }), "temporary")
+    ).resolves.toMatchObject({ key: "session", liveUntilLedgerSeq: 200, state: "live" });
+  });
+
+  it("reports an evicted temporary key as expired instead of missing", async () => {
+    vi.mocked(isIndexerConfigured).mockReturnValue(true);
+    vi.spyOn(rpc.Server.prototype, "getContractData").mockRejectedValue(new Error("not found"));
+    vi.spyOn(rpc.Server.prototype, "getLatestLedger").mockResolvedValue({ sequence: 100 } as never);
+    vi.mocked(getIndexedStorageEntries).mockResolvedValue([indexedEntry()]);
+
+    await expect(
+      lookupStorageEntry("contract-id", nativeToScVal("session", { type: "symbol" }), "temporary")
+    ).resolves.toMatchObject({ key: "session", liveUntilLedgerSeq: 90, state: "expired" });
   });
 });
 

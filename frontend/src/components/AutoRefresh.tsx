@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { shouldRefresh } from "@/lib/visibility";
 
 interface Props { intervalMs?: number }
 
@@ -15,8 +16,17 @@ export default function AutoRefresh({ intervalMs = 6000 }: Props) {
   const router = useRouter();
 
   useEffect(() => {
-    const id = setInterval(() => router.refresh(), intervalMs);
-    return () => clearInterval(id);
+    // Don't re-run the server components for a tab nobody is looking at.
+    // Refresh once when the tab becomes visible again so it isn't stale.
+    const refreshIfVisible = () => {
+      if (shouldRefresh(document.visibilityState)) router.refresh();
+    };
+    const id = setInterval(refreshIfVisible, intervalMs);
+    document.addEventListener("visibilitychange", refreshIfVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", refreshIfVisible);
+    };
   }, [router, intervalMs]);
 
   return null;

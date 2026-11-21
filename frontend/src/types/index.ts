@@ -78,10 +78,16 @@ export interface ContractEvent {
   timestamp: string;
 }
 
+/** Derived by comparing an entry's TTL with the latest ledger. */
+export type StorageEntryState = "live" | "expired" | "archived";
+
 export interface StorageEntry {
   key: string;
   value: string;
   durability: "persistent" | "temporary" | "instance";
+  /** Ledger at which this entry's TTL expires, when known. */
+  liveUntilLedgerSeq?: number;
+  state?: StorageEntryState;
 }
 
 export interface ContractInfo {
