@@ -36,6 +36,49 @@ export function formatFee(stroops: number): string {
   return `${stroops.toLocaleString()} stroops`;
 }
 
+/**
+ * Decode base64 without Buffer so this helper is safe in both server and
+ * client components. Horizon sends hash/return memos base64-encoded; the XDR
+ * decoder already shows them as hex, so do the same here.
+ */
+function base64ToHex(value: string): string {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let hex = "";
+  let bits = 0;
+  let byte = 0;
+  for (const char of value.replace(/=+$/, "")) {
+    const digit = alphabet.indexOf(char);
+    if (digit < 0) continue; // tolerate whitespace or malformed input
+    byte = (byte << 6) | digit;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      hex += ((byte >> bits) & 0xff).toString(16).padStart(2, "0");
+    }
+  }
+  return hex;
+}
+
+/**
+ * Format a Horizon memo's *value*. Text and ID memos are already readable;
+ * hash and return memos arrive as base64 and are shown as hex. The memo type
+ * is rendered as a separate label (e.g. "Memo (hash)").
+ */
+export function formatMemo(memo: string, memoType?: string): string {
+  if (memoType === "hash" || memoType === "return") return base64ToHex(memo);
+  return memo;
+}
+
+/** The labelled row the transaction page renders for a memo. */
+export function formatMemoDetail(memo: string, memoType?: string) {
+  const type = memoType ?? "text";
+  return {
+    label: `Memo (${type})`,
+    value: formatMemo(memo, type),
+    mono: type === "hash" || type === "return",
+  };
+}
+
 /** Format an ISO date string to a human-friendly label */
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {

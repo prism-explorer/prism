@@ -31,7 +31,7 @@ export async function GET(req: Request, { params }: Params) {
   try {
     const envelope = xdr.TransactionEnvelope.fromXDR(tx.envelopeXdr, "base64");
     invocation = decodeInvocation(envelope);
-    resources = getResourceUsage(envelope);
+    resources = getResourceUsage(envelope, tx.fee);
   } catch {
     // Envelope uses a newer XDR type this SDK version cannot decode.
     // Return the Horizon fields with envelope-derived fields set to null (#26).

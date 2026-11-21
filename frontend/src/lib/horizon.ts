@@ -1,5 +1,12 @@
-import type { AccountRecord, LedgerRecord, TransactionRecord } from "@/types";
+import type {
+  AccountRecord,
+  LedgerRecord,
+  OperationField,
+  OperationRecord,
+  TransactionRecord,
+} from "@/types";
 import { config } from "./config";
+import { shortHash } from "./format";
 
 const BASE_URL = config.horizonUrl;
 
@@ -87,9 +94,55 @@ interface HorizonTransaction {
   operation_count: number;
   successful: boolean;
   memo?: string | null;
+  memo_type?: string;
+  /** Fee bump fields. Horizon only sends these for a wrapped transaction. */
+  fee_account?: string;
+  fee_bump_transaction?: { hash: string };
+  inner_transaction?: {
+    hash: string;
+    source_account?: string;
+    /** Newer Horizon versions report the inner fee here; older ones use max_fee. */
+    fee_charged?: string | number;
+    max_fee?: string | number;
+  };
   envelope_xdr: string;
   result_xdr: string;
   paging_token?: string;
+}
+
+/**
+ * The subset of a Horizon operation record Prism renders. The index signature
+ * covers the fields only present on some types (and the raw fallback).
+ */
+interface HorizonOperation {
+  id: string;
+  type: string;
+  source_account?: string;
+  from?: string;
+  to?: string;
+  account?: string;
+  destination?: string;
+  amount?: string;
+  starting_balance?: string;
+  limit?: string;
+  offer_id?: string;
+  price?: string;
+  asset_type?: string;
+  asset_code?: string;
+  asset_issuer?: string;
+  source_asset_type?: string;
+  source_asset_code?: string;
+  source_asset_issuer?: string;
+  selling_asset_type?: string;
+  selling_asset_code?: string;
+  selling_asset_issuer?: string;
+  buying_asset_type?: string;
+  buying_asset_code?: string;
+  buying_asset_issuer?: string;
+  source_amount?: string;
+  function?: string;
+  bump_to?: string;
+  [field: string]: unknown;
 }
 
 interface HorizonBalance {
@@ -147,6 +200,18 @@ export async function getLedger(sequence: number): Promise<LedgerRecord> {
 export async function getTransaction(hash: string): Promise<TransactionRecord> {
   const data = await get<HorizonTransaction>(`/transactions/${hash}`, REVALIDATE_FINALIZED);
   return mapTransaction(data);
+}
+
+/**
+ * Operations are a separate Horizon resource. A transaction holds at most 100
+ * of them, so one page covers every case without following cursors.
+ */
+export async function getTransactionOperations(hash: string): Promise<OperationRecord[]> {
+  const data = await get<HorizonPage<HorizonOperation>>(
+    `/transactions/${hash}/operations?limit=200`,
+    REVALIDATE_FINALIZED
+  );
+  return data._embedded.records.map(mapOperation);
 }
 
 export async function getRecentTransactions(limit = 20): Promise<TransactionRecord[]> {
@@ -306,6 +371,8 @@ function mapAccount(r: HorizonAccount): AccountRecord {
 }
 
 function mapTransaction(r: HorizonTransaction): TransactionRecord {
+  const inner = r.inner_transaction;
+  const innerFee = inner?.fee_charged ?? inner?.max_fee;
   return {
     hash: r.hash,
     ledger: r.ledger,
@@ -315,8 +382,128 @@ function mapTransaction(r: HorizonTransaction): TransactionRecord {
     operationCount: r.operation_count,
     successful: r.successful,
     memo: r.memo ?? undefined,
+    memoType: r.memo_type,
+    feeAccount: r.fee_account,
+    feeBumpTransaction: r.fee_bump_transaction
+      ? { hash: r.fee_bump_transaction.hash }
+      : undefined,
+    innerTransaction: inner
+      ? {
+          hash: inner.hash,
+          sourceAccount: inner.source_account,
+          feeCharged: innerFee === undefined ? undefined : toNumber(innerFee),
+        }
+      : undefined,
     envelopeXdr: r.envelope_xdr,
     resultXdr: r.result_xdr,
     pagingToken: r.paging_token,
+  };
+}
+
+/** A Horizon asset triplet reduced to one display label. */
+function assetLabel(type?: string, code?: string, issuer?: string): string {
+  if (type === "native") return "XLM";
+  if (code && issuer) return `${code}:${shortHash(issuer, 6)}`;
+  return code ?? type ?? "unknown asset";
+}
+
+/** snake_case Horizon field names become readable labels in the raw fallback. */
+function fieldLabel(name: string): string {
+  return name.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * Pull the useful fields out of an operation. Prism only knows a handful of
+ * operation types; for everything else it dumps the scalar fields verbatim so
+ * the information is still on screen rather than silently disappearing.
+ */
+function mapOperation(r: HorizonOperation): OperationRecord {
+  const fields: OperationField[] = [];
+  switch (r.type) {
+    case "payment":
+      fields.push(
+        { label: "From", value: String(r.from ?? ""), mono: true },
+        { label: "To", value: String(r.to ?? ""), mono: true },
+        { label: "Asset", value: assetLabel(r.asset_type, r.asset_code, r.asset_issuer) },
+        { label: "Amount", value: String(r.amount ?? "") }
+      );
+      break;
+    case "path_payment_strict_send":
+    case "path_payment_strict_receive":
+      fields.push(
+        { label: "From", value: String(r.from ?? ""), mono: true },
+        { label: "To", value: String(r.to ?? ""), mono: true },
+        { label: "Asset", value: assetLabel(r.asset_type, r.asset_code, r.asset_issuer) },
+        { label: "Amount", value: String(r.amount ?? "") },
+        {
+          label: "Source asset",
+          value: assetLabel(r.source_asset_type, r.source_asset_code, r.source_asset_issuer),
+        },
+        { label: "Source amount", value: String(r.source_amount ?? "") }
+      );
+      break;
+    case "create_account":
+      fields.push(
+        { label: "Account", value: String(r.account ?? ""), mono: true },
+        { label: "Starting balance", value: String(r.starting_balance ?? "") }
+      );
+      break;
+    case "change_trust":
+      fields.push(
+        { label: "Trustor", value: String(r.source_account ?? ""), mono: true },
+        { label: "Asset", value: assetLabel(r.asset_type, r.asset_code, r.asset_issuer) },
+        { label: "Limit", value: String(r.limit ?? "") }
+      );
+      break;
+    case "manage_sell_offer":
+    case "manage_buy_offer":
+      fields.push(
+        { label: "Offer ID", value: String(r.offer_id ?? "") },
+        {
+          label: "Selling",
+          value: assetLabel(r.selling_asset_type, r.selling_asset_code, r.selling_asset_issuer),
+        },
+        {
+          label: "Buying",
+          value: assetLabel(r.buying_asset_type, r.buying_asset_code, r.buying_asset_issuer),
+        },
+        { label: "Amount", value: String(r.amount ?? "") },
+        { label: "Price", value: String(r.price ?? "") }
+      );
+      break;
+    case "invoke_host_function":
+      fields.push({ label: "Function", value: String(r.function ?? "") });
+      break;
+    case "bump_sequence":
+      fields.push({ label: "Bump to", value: String(r.bump_to ?? "") });
+      break;
+    default:
+      // Unknown operation type: show every scalar field so nothing is hidden.
+      for (const [key, value] of Object.entries(r)) {
+        // type and source are already shown in the card header; _links is noise.
+        if (["type", "source_account", "_links"].includes(key)) continue;
+        if (value === null || typeof value === "object") continue;
+        fields.push({ label: fieldLabel(key), value: String(value) });
+      }
+  }
+
+  return {
+    id: r.id,
+    type: r.type,
+    sourceAccount: r.source_account,
+    // A field can be absent on a particular record (e.g. an unlimited trustline
+    // still has `limit`, but some Horizon versions omit it). Don't render blanks.
+    fields: fields.filter((f) => f.value !== ""),
+    raw: ![
+      "payment",
+      "path_payment_strict_send",
+      "path_payment_strict_receive",
+      "create_account",
+      "change_trust",
+      "manage_sell_offer",
+      "manage_buy_offer",
+      "invoke_host_function",
+      "bump_sequence",
+    ].includes(r.type),
   };
 }

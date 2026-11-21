@@ -21,9 +21,41 @@ export interface TransactionRecord {
   operationCount: number;
   successful: boolean;
   memo?: string;
+  /** Horizon's memo_type: text, id, hash, return or none. */
+  memoType?: string;
+  /** On a fee bump transaction, the account that paid the outer (bump) fee. */
+  feeAccount?: string;
+  /** On a fee bump transaction, the outer envelope and its hash. */
+  feeBumpTransaction?: { hash: string };
+  /** On a fee bump transaction, the wrapped transaction and its own fee. */
+  innerTransaction?: {
+    hash: string;
+    sourceAccount?: string;
+    feeCharged?: number;
+  };
   envelopeXdr: string;
   resultXdr: string;
   pagingToken?: string;
+}
+
+/** One labelled field of a decoded operation. */
+export interface OperationField {
+  label: string;
+  value: string;
+  mono?: boolean;
+}
+
+/**
+ * A Horizon operation reduced to the fields worth showing. Types Prism knows
+ * get their key fields pulled out; everything else is dumped generically and
+ * flagged with `raw`.
+ */
+export interface OperationRecord {
+  id: string;
+  type: string;
+  sourceAccount?: string;
+  fields: OperationField[];
+  raw: boolean;
 }
 
 export interface AccountBalance {
@@ -137,11 +169,21 @@ export interface OperationInvocation extends SorobanInvocation {
   operationIndex: number;
 }
 
+/** One ledger entry touched by a Soroban transaction. */
+export interface FootprintEntry {
+  access: "read" | "write";
+  /** e.g. `CABC… — counter` for storage, or `code a1b2…` for a WASM hash. */
+  label: string;
+}
+
 export interface ResourceUsage {
   instructions: number;
   readBytes: number;
   writeBytes: number;
   resourceFeeStroops: string;
+  footprint: FootprintEntry[];
+  /** Set only when the caller supplies Horizon's total fee charged. */
+  inclusionFeeStroops?: string;
 }
 
 export interface InvocationHistoryItem {

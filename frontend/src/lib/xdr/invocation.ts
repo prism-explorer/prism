@@ -1,5 +1,5 @@
 import { Address, xdr } from "@stellar/stellar-sdk";
-import type { OperationInvocation, ResourceUsage, SorobanInvocation } from "@/types";
+import type { FootprintEntry, OperationInvocation, ResourceUsage, SorobanInvocation } from "@/types";
 import { scValToDisplay } from "./display";
 
 /**
@@ -50,8 +50,45 @@ export function decodeInvocation(envelope: xdr.TransactionEnvelope): SorobanInvo
   return decodeInvocations(envelope)[0] ?? null;
 }
 
-/** Decode a transaction envelope's Soroban resource footprint (instructions, I/O bytes, resource fee), if any. */
-export function getResourceUsage(envelope: xdr.TransactionEnvelope): ResourceUsage | null {
+function bytesToHex(bytes: Iterable<number>): string {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Label a ledger key for the footprint list. Contract data gets its contract
+ * and storage key; WASM code gets its hash; other key kinds fall back to the
+ * XDR arm name so an unfamiliar entry is still visible.
+ */
+function ledgerKeyLabel(key: xdr.LedgerKey): string {
+  const kind = key.switch().name;
+  try {
+    if (kind === "contractData") {
+      const data = key.contractData();
+      const contract = Address.fromScAddress(data.contract()).toString();
+      return `${contract} — ${scValToDisplay(data.key())}`;
+    }
+    if (kind === "contractCode") {
+      return `code ${bytesToHex(key.contractCode().hash())}`;
+    }
+  } catch {
+    // A malformed or newer key still gets a label rather than crashing the page.
+  }
+  return kind;
+}
+
+/**
+ * Decode a transaction envelope's Soroban resource data: limits, the resource
+ * fee, and every ledger entry in its footprint (read-only and read-write).
+ *
+ * `feeChargedStroops`, when supplied from Horizon's transaction record, lets
+ * the caller split the total fee into its inclusion and resource parts.
+ */
+export function getResourceUsage(
+  envelope: xdr.TransactionEnvelope,
+  feeChargedStroops?: string | number
+): ResourceUsage | null {
   try {
     const tx = v1Tx(envelope);
     if (!tx) return null;
@@ -59,11 +96,22 @@ export function getResourceUsage(envelope: xdr.TransactionEnvelope): ResourceUsa
     if (ext.switch() !== 1) return null;
     const data = ext.sorobanData();
     const resources = data.resources();
+    const footprint = resources.footprint();
+    const footprintEntries: FootprintEntry[] = [
+      ...footprint.readOnly().map((key): FootprintEntry => ({ access: "read", label: ledgerKeyLabel(key) })),
+      ...footprint.readWrite().map((key): FootprintEntry => ({ access: "write", label: ledgerKeyLabel(key) })),
+    ];
+    const resourceFeeStroops = data.resourceFee().toString();
     return {
       instructions: resources.instructions(),
       readBytes: resources.diskReadBytes(),
       writeBytes: resources.writeBytes(),
-      resourceFeeStroops: data.resourceFee().toString(),
+      resourceFeeStroops,
+      footprint: footprintEntries,
+      inclusionFeeStroops:
+        feeChargedStroops === undefined
+          ? undefined
+          : (BigInt(feeChargedStroops) - BigInt(resourceFeeStroops)).toString(),
     };
   } catch {
     return null;

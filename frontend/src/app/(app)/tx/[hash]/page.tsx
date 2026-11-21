@@ -1,11 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { xdr } from "@stellar/stellar-sdk";
-import { getTransaction, isNotFound } from "@/lib/horizon";
+import { getTransaction, getTransactionOperations, isNotFound } from "@/lib/horizon";
 import CopyButton from "@/components/CopyButton";
 import { getInvocationReturnValue } from "@/lib/soroban";
 import { decodeInvocations, decodeTransactionFailure, getResourceUsage } from "@/lib/xdr";
-import { formatDate, formatFee, stroopsToXlm, formatNumber } from "@/lib/format";
+import { formatDate, formatFee, formatMemoDetail, stroopsToXlm, formatNumber } from "@/lib/format";
 import { notFound } from "next/navigation";
 import DetailRow from "@/components/DetailRow";
 
@@ -65,8 +65,50 @@ export default async function TxPage({ params }: Props) {
   const failureUndecodable = outcome?.status === "undecodable";
 
   const invocations = envelope ? decodeInvocations(envelope) : [];
-  const resources = envelope ? getResourceUsage(envelope) : null;
+  const resources = envelope ? getResourceUsage(envelope, tx.fee) : null;
   const returnValue = invocations.length > 0 ? await getInvocationReturnValue(tx.hash) : null;
+
+  // Non-Soroban transactions have no invocation panel, so their operations
+  // would otherwise be visible only as a count. The operations resource is
+  // independent of the envelope; a failure there shouldn't hide the rest.
+  const operations = tx.operationCount > 0
+    ? await getTransactionOperations(params.hash).catch(() => [])
+    : [];
+  const memo = tx.memo ? formatMemoDetail(tx.memo, tx.memoType) : null;
+
+  // Resource usage describes the whole transaction, so it is rendered once —
+  // under the first invocation when there is one, or on its own otherwise.
+  const resourceRows = resources ? (
+    <>
+      <DetailRow label="CPU Instructions" value={formatNumber(resources.instructions)} />
+      <DetailRow label="Read Bytes" value={formatNumber(resources.readBytes)} />
+      <DetailRow label="Write Bytes" value={formatNumber(resources.writeBytes)} />
+      {resources.inclusionFeeStroops !== undefined && (
+        <DetailRow
+          label="Inclusion Fee"
+          value={`${Number(resources.inclusionFeeStroops).toLocaleString()} stroops`}
+        />
+      )}
+      <DetailRow label="Resource Fee" value={`${Number(resources.resourceFeeStroops).toLocaleString()} stroops`} />
+      {resources.footprint.length > 0 && (
+        <div className="border-t border-prism-border pt-3">
+          <p className="text-prism-muted text-sm mb-2">Footprint</p>
+          <ul className="space-y-1">
+            {resources.footprint.map((entry, j) => (
+              <li key={`${entry.access}-${j}`} className="flex gap-2 text-xs font-mono break-all">
+                <span
+                  className={`shrink-0 ${entry.access === "write" ? "text-prism-accent" : "text-prism-muted"}`}
+                >
+                  {entry.access === "write" ? "W" : "R"}
+                </span>
+                <span>{entry.label}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  ) : null;
 
   return (
     <div>
@@ -81,10 +123,69 @@ export default async function TxPage({ params }: Props) {
         <DetailRow label="Ledger" value={String(tx.ledger)} />
         <DetailRow label="Timestamp" value={formatDate(tx.createdAt)} />
         <DetailRow label="Source" value={tx.sourceAccount} mono />
+        {tx.feeAccount && (
+          <DetailRow
+            label="Fee Source"
+            value={tx.feeAccount}
+            mono
+            link={`/account/${tx.feeAccount}`}
+          />
+        )}
         <DetailRow label="Fee" value={`${formatFee(tx.fee)} (${stroopsToXlm(tx.fee)})`} />
+        {tx.innerTransaction && (
+          <>
+            {tx.innerTransaction.feeCharged !== undefined && (
+              <>
+                <DetailRow
+                  label="Inner Fee"
+                  value={`${formatFee(tx.innerTransaction.feeCharged)} (${stroopsToXlm(tx.innerTransaction.feeCharged)})`}
+                />
+                <DetailRow
+                  label="Outer Fee"
+                  value={`${formatFee(tx.fee - tx.innerTransaction.feeCharged)} (${stroopsToXlm(tx.fee - tx.innerTransaction.feeCharged)})`}
+                />
+              </>
+            )}
+            <DetailRow
+              label="Inner Hash"
+              value={tx.innerTransaction.hash}
+              mono
+              link={`/tx/${tx.innerTransaction.hash}`}
+            />
+          </>
+        )}
+        {tx.feeBumpTransaction && tx.feeBumpTransaction.hash !== tx.hash && (
+          <DetailRow label="Fee Bump Hash" value={tx.feeBumpTransaction.hash} mono />
+        )}
         <DetailRow label="Operations" value={String(tx.operationCount)} />
-        {tx.memo && <DetailRow label="Memo" value={tx.memo} />}
+        {memo && <DetailRow label={memo.label} value={memo.value} mono={memo.mono} />}
       </div>
+
+      {operations.length > 0 && (
+        <div className="mt-6 rounded-xl border border-prism-border bg-prism-surface p-6">
+          <h2 className="text-lg font-semibold mb-4">Operations</h2>
+          <ol className="space-y-4">
+            {operations.map((op, index) => (
+              <li key={op.id} className="border-b border-prism-border pb-4 last:border-0 last:pb-0">
+                <p className="text-sm font-semibold mb-2">
+                  #{index + 1} <span className="font-mono text-prism-accent">{op.type}</span>
+                  {op.raw && (
+                    <span className="ml-2 text-xs font-normal text-prism-muted">
+                      (unrecognised type — raw fields)
+                    </span>
+                  )}
+                </p>
+                {op.sourceAccount && (
+                  <DetailRow label="Source" value={op.sourceAccount} mono />
+                )}
+                {op.fields.map((field) => (
+                  <DetailRow key={field.label} label={field.label} value={field.value} mono={field.mono} />
+                ))}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {failure && (
         <div className="mt-6 rounded-xl border border-prism-red/30 bg-prism-red/10 p-5">
@@ -157,8 +258,8 @@ export default async function TxPage({ params }: Props) {
           <h2 className="text-lg font-semibold mb-1">
             Soroban Invocation <span className="text-sm font-mono text-prism-muted">operation #{invocation.operationIndex}</span>
           </h2>
-          <Row label="Contract" value={invocation.contractId} mono link={`/contract/${invocation.contractId}`} />
-          <Row label="Function" value={invocation.functionName} mono />
+          <DetailRow label="Contract" value={invocation.contractId} mono link={`/contract/${invocation.contractId}`} />
+          <DetailRow label="Function" value={invocation.functionName} mono />
           {invocation.args.length > 0 && (
             <div className="border-b border-prism-border pb-3">
               <p className="text-prism-muted text-sm mb-2">Arguments</p>
@@ -172,17 +273,17 @@ export default async function TxPage({ params }: Props) {
             </div>
           )}
           {/* Return value and resource usage describe the whole transaction, so they appear once, under the first call. */}
-          {i === 0 && returnValue !== null && <Row label="Return Value" value={returnValue} mono />}
-          {i === 0 && resources && (
-            <>
-              <DetailRow label="CPU Instructions" value={formatNumber(resources.instructions)} />
-              <DetailRow label="Read Bytes" value={formatNumber(resources.readBytes)} />
-              <DetailRow label="Write Bytes" value={formatNumber(resources.writeBytes)} />
-              <DetailRow label="Resource Fee" value={`${resources.resourceFeeStroops} stroops`} />
-            </>
-          )}
+          {i === 0 && returnValue !== null && <DetailRow label="Return Value" value={returnValue} mono />}
+          {i === 0 && resourceRows}
         </div>
       ))}
+
+      {resources && invocations.length === 0 && (
+        <div className="mt-6 rounded-xl border border-prism-border bg-prism-surface p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Soroban Resources</h2>
+          {resourceRows}
+        </div>
+      )}
     </div>
   );
 }
