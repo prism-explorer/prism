@@ -107,6 +107,8 @@ model ContractEventRecord {
   type       String
   topic      Json
   value      String
+  topicXdr   Json
+  valueXdr   String
   txHash     String
   ledger     Int
   createdAt  DateTime
