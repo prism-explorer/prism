@@ -144,6 +144,16 @@ export interface ResourceUsage {
   resourceFeeStroops: string;
 }
 
+/** Storage access and I/O figures reported by a read-only simulation. */
+export interface SimulationFootprint {
+  /** Human-readable descriptions of the read-only ledger keys. */
+  readOnly: string[];
+  /** Human-readable descriptions of the read-write ledger keys. */
+  readWrite: string[];
+  readBytes: number;
+  writeBytes: number;
+}
+
 export interface InvocationHistoryItem {
   txHash: string;
   ledger: number;

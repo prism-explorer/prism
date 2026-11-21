@@ -6,6 +6,12 @@ export { decodeScVal, scValToDisplay, decodeXdr, decodeScValXdr } from "./displa
 export { parseContractSpec, parseContractTypes, parseContractEvents } from "./spec";
 export type { ParsedFunctionSpec, EventParamSpec, ParsedEventSpec, ParsedTypeDef } from "./spec";
 export { decodeInvocations, decodeInvocation, getResourceUsage } from "./invocation";
+export {
+  describeAuthorizations,
+  decodeSimulationEvents,
+  decodeSimulationFootprint,
+  describeLedgerKey,
+} from "./simulation";
 export { identifyXdr, base64FromQueryParam, decodeAnyXdr } from "./identify";
 export type { XdrTypeName, XdrField, XdrDecodeResult } from "./identify";
 export { decodeTransactionFailure } from "./failure";

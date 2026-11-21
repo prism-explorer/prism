@@ -2,19 +2,22 @@
 
 import { useState, useTransition } from "react";
 import { simulateInvocationAction } from "@/lib/actions";
-import type { ContractFunctionSpec, ContractTypeDef } from "@/types";
+import type { ContractEventSpec, ContractFunctionSpec, ContractTypeDef } from "@/types";
 import { describeContractError } from "@/lib/contract-error";
 import type { SimulationResult } from "@/lib/soroban";
 import { formatNumber } from "@/lib/format";
 import CopyButton from "@/components/CopyButton";
+import EventLog from "@/components/EventLog";
 
 interface Props {
   contractId: string;
   functions: ContractFunctionSpec[];
   types?: ContractTypeDef[];
+  /** Event declarations from the contract spec, used to label simulated events. */
+  eventSpecs?: ContractEventSpec[];
 }
 
-export default function InvokeTool({ contractId, functions, types = [] }: Props) {
+export default function InvokeTool({ contractId, functions, types = [], eventSpecs = [] }: Props) {
   const [selected, setSelected] = useState(functions[0]?.name ?? "");
   const fn = functions.find((f) => f.name === selected);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -150,6 +153,58 @@ export default function InvokeTool({ contractId, functions, types = [] }: Props)
                   <pre className="break-all whitespace-pre-wrap bg-prism-bg border border-prism-border rounded p-2 text-xs">
                     {formatReturnValue(result.returnValue).formatted}
                   </pre>
+                </div>
+              )}
+              {result.auth && result.auth.length > 0 && (
+                <div className="space-y-1">
+                  <p className="text-prism-muted">Authorization</p>
+                  <ul className="list-disc list-inside space-y-0.5 break-all">
+                    {result.auth.map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {result.events !== undefined && (
+                <div className="space-y-1">
+                  <p className="text-prism-muted">Events emitted</p>
+                  <EventLog
+                    events={result.events}
+                    specs={eventSpecs}
+                    showMeta={false}
+                    emptyMessage="No events emitted during this simulation."
+                  />
+                </div>
+              )}
+              {result.footprint && (
+                <div className="space-y-1">
+                  <p className="text-prism-muted">Footprint</p>
+                  <p>
+                    <span className="text-prism-muted">Read bytes:</span>{" "}
+                    {formatNumber(result.footprint.readBytes)} ·{" "}
+                    <span className="text-prism-muted">Write bytes:</span>{" "}
+                    {formatNumber(result.footprint.writeBytes)}
+                  </p>
+                  {result.footprint.readOnly.length > 0 && (
+                    <div>
+                      <p className="text-prism-muted">Read-only ({result.footprint.readOnly.length})</p>
+                      <ul className="list-disc list-inside space-y-0.5 break-all">
+                        {result.footprint.readOnly.map((key, i) => (
+                          <li key={i}>{key}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {result.footprint.readWrite.length > 0 && (
+                    <div>
+                      <p className="text-prism-muted">Read-write ({result.footprint.readWrite.length})</p>
+                      <ul className="list-disc list-inside space-y-0.5 break-all">
+                        {result.footprint.readWrite.map((key, i) => (
+                          <li key={i}>{key}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
               {result.instructions !== undefined && (

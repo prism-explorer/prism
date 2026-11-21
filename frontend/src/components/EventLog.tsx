@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ContractEvent, ContractEventSpec } from "@/types";
 import { shortHash } from "@/lib/format";
+import { linkifyAddresses } from "@/lib/linkify";
 import { labelEventData, labelEventTopics, matchEventSpec } from "@/lib/event-spec";
 import RelativeTime from "@/components/RelativeTime";
 import EmptyState from "@/components/EmptyState";
@@ -11,40 +12,19 @@ interface Props {
   specs?: ContractEventSpec[];
   /** Set when the lookup failed; distinct from a successful, empty result. */
   error?: string | null;
+  /** Simulated events have no transaction/ledger, so hide that metadata. */
+  showMeta?: boolean;
+  /** Override the empty-state copy when the events aren't a historical lookup. */
+  emptyMessage?: string;
 }
 
-function linkifyAddresses(text: string): React.ReactNode {
-  const addressPattern = /\b([GC][A-Z2-7]{55})\b/g;
-  const parts: React.ReactNode[] = [];
-  let lastIndex = 0;
-  let match;
-
-  while ((match = addressPattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.substring(lastIndex, match.index));
-    }
-    const address = match[1];
-    const isContract = address.startsWith("C");
-    parts.push(
-      <Link
-        key={match.index}
-        href={isContract ? `/contract/${address}` : `/account/${address}`}
-        className="text-prism-accent hover:underline"
-      >
-        {address}
-      </Link>
-    );
-    lastIndex = match.index + address.length;
-  }
-
-  if (lastIndex < text.length) {
-    parts.push(text.substring(lastIndex));
-  }
-
-  return parts.length > 0 ? parts : text;
-}
-
-export default function EventLog({ events, specs = [], error = null }: Props) {
+export default function EventLog({
+  events,
+  specs = [],
+  error = null,
+  showMeta = true,
+  emptyMessage,
+}: Props) {
   if (error) {
     return (
       <ErrorState>
@@ -56,7 +36,8 @@ export default function EventLog({ events, specs = [], error = null }: Props) {
   if (events.length === 0) {
     return (
       <EmptyState>
-        No events emitted by this contract in the last ~24h (the RPC node&apos;s retention window).
+        {emptyMessage ??
+          "No events emitted by this contract in the last ~24h (the RPC node's retention window)."}
       </EmptyState>
     );
   }
@@ -85,17 +66,19 @@ export default function EventLog({ events, specs = [], error = null }: Props) {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <Link
-                  href={`/tx/${e.txHash}`}
-                  className="text-xs text-prism-muted hover:text-prism-strong transition font-mono"
-                >
-                  {shortHash(e.txHash, 4)}
-                </Link>
-                <span className="text-xs text-prism-muted">
-                  <RelativeTime iso={e.timestamp} />
-                </span>
-              </div>
+              {showMeta && (
+                <div className="flex items-center gap-3 shrink-0">
+                  <Link
+                    href={`/tx/${e.txHash}`}
+                    className="text-xs text-prism-muted hover:text-prism-strong transition font-mono"
+                  >
+                    {shortHash(e.txHash, 4)}
+                  </Link>
+                  <span className="text-xs text-prism-muted">
+                    <RelativeTime iso={e.timestamp} />
+                  </span>
+                </div>
+              )}
             </div>
 
             {spec ? (
@@ -115,7 +98,15 @@ export default function EventLog({ events, specs = [], error = null }: Props) {
             ) : (
               e.topic.length > 0 && (
                 <p className="text-xs text-prism-muted mb-1">
-                  Topic: <span className="font-mono text-prism-strong">{e.topic.join(", ")}</span>
+                  Topic:{" "}
+                  <span className="font-mono text-prism-strong">
+                    {e.topic.map((topic, i) => (
+                      <span key={i}>
+                        {i > 0 && ", "}
+                        {linkifyAddresses(topic)}
+                      </span>
+                    ))}
+                  </span>
                 </p>
               )
             )}

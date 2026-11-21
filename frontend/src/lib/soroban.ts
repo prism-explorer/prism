@@ -4,10 +4,15 @@ import type {
   ContractInfo,
   ContractWasmInfo,
   InvocationHistoryItem,
+  SimulationFootprint,
   StorageEntry,
 } from "@/types";
 import {
   decodeInvocation,
+  decodeScVal,
+  decodeSimulationEvents,
+  decodeSimulationFootprint,
+  describeAuthorizations,
   parseContractEvents,
   parseContractSpec,
   parseContractTypes,
@@ -33,6 +38,39 @@ function server(): rpc.Server {
   return _server;
 }
 
+/**
+ * Stellar Asset Contracts don't keep `name` / `symbol` / `decimals` as separate
+ * instance keys — they pack all three into a single map under a `METADATA` key.
+ * Read that map (and still accept the direct keys as a fallback for other
+ * layouts), rendering the map's `decimal` field as `decimals`.
+ */
+export function extractSacAssetDetails(
+  storage: xdr.ScMapEntry[]
+): { name?: string; symbol?: string; decimals?: number } | undefined {
+  const details: { name?: string; symbol?: string; decimals?: number } = {};
+  for (const entry of storage) {
+    const key = scValToDisplay(entry.key());
+    if (key.includes("METADATA")) {
+      const meta = decodeScVal(entry.val());
+      if (meta && typeof meta === "object" && !Array.isArray(meta)) {
+        const map = meta as Record<string, unknown>;
+        if (typeof map.name === "string") details.name = map.name;
+        if (typeof map.symbol === "string") details.symbol = map.symbol;
+        const dec = Number(map.decimal);
+        if (Number.isFinite(dec)) details.decimals = dec;
+      }
+      continue;
+    }
+    if (key === "name") details.name = scValToDisplay(entry.val());
+    if (key === "symbol") details.symbol = scValToDisplay(entry.val());
+    if (key === "decimals") {
+      const dec = Number(scValToDisplay(entry.val()));
+      if (Number.isFinite(dec)) details.decimals = dec;
+    }
+  }
+  return details.name || details.symbol || details.decimals !== undefined ? details : undefined;
+}
+
 export async function getContractInfo(contractId: string): Promise<ContractInfo | null> {
   let info: ContractInfo;
   try {
@@ -50,17 +88,7 @@ export async function getContractInfo(contractId: string): Promise<ContractInfo 
       durability: "instance" as const,
     }));
 
-    const assetDetails: { name?: string; symbol?: string; decimals?: number } = {};
-    if (!isWasm) {
-      for (const entry of instanceStorage) {
-        if (entry.key === "name") assetDetails.name = entry.value;
-        if (entry.key === "symbol") assetDetails.symbol = entry.value;
-        if (entry.key === "decimals") {
-          const dec = Number(entry.value);
-          if (!isNaN(dec)) assetDetails.decimals = dec;
-        }
-      }
-    }
+    const assetDetails = isWasm ? undefined : extractSacAssetDetails(instance.storage() ?? []);
 
     info = {
       executable: isWasm ? "wasm" : "stellar_asset",
@@ -68,9 +96,7 @@ export async function getContractInfo(contractId: string): Promise<ContractInfo 
       liveUntilLedgerSeq: entry.liveUntilLedgerSeq,
       lastModifiedLedgerSeq: entry.lastModifiedLedgerSeq,
       instanceStorage,
-      assetDetails: !isWasm && (assetDetails.name || assetDetails.symbol || assetDetails.decimals !== undefined) 
-        ? assetDetails 
-        : undefined,
+      assetDetails,
     };
   } catch {
     return null;
@@ -377,6 +403,12 @@ export interface SimulationResult {
   error?: string;
   resourceFeeStroops?: string;
   instructions?: number;
+  /** Human-readable "signer authorizes call" lines from `result.auth`. */
+  auth?: string[];
+  /** Contract events emitted during the simulation. */
+  events?: ContractEvent[];
+  /** Storage footprint and I/O figures from `transactionData`. */
+  footprint?: SimulationFootprint;
   needsRestore?: {
     minResourceFeeStroops: string;
   };
@@ -416,6 +448,9 @@ export async function simulateInvocation(
       returnValue: sim.result?.retval ? scValToDisplay(sim.result.retval) : undefined,
       resourceFeeStroops: String(sim.minResourceFee),
       instructions: resources.instructions(),
+      auth: sim.result?.auth ? describeAuthorizations(sim.result.auth) : undefined,
+      events: decodeSimulationEvents(sim.events, contractId),
+      footprint: decodeSimulationFootprint(resources),
     };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) };

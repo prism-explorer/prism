@@ -14,9 +14,27 @@ export default function ContractOverview({ info, wasm }: Props) {
     );
   }
 
+  // A SAC's name is "CODE:ISSUER" for issued assets, and just "native" for XLM.
+  const assetName = info.assetDetails?.name;
+  const assetIssuer = assetName?.includes(":")
+    ? assetName.slice(assetName.indexOf(":") + 1)
+    : undefined;
+
   return (
     <div className="rounded-xl border border-prism-border bg-prism-surface p-6 space-y-4">
       <DetailRow label="Executable" value={info.executable === "wasm" ? "WASM contract" : "Stellar Asset Contract"} />
+      {info.assetDetails && (
+        <>
+          {info.assetDetails.name && <DetailRow label="Name" value={info.assetDetails.name} />}
+          {info.assetDetails.symbol && <DetailRow label="Symbol" value={info.assetDetails.symbol} />}
+          {info.assetDetails.decimals !== undefined && (
+            <DetailRow label="Decimals" value={String(info.assetDetails.decimals)} />
+          )}
+          {assetIssuer && (
+            <DetailRow label="Issuer" value={assetIssuer} mono link={`/account/${assetIssuer}`} />
+          )}
+        </>
+      )}
       {info.wasmHash && <DetailRow label="WASM Hash" value={info.wasmHash} mono />}
       {wasm && <DetailRow label="WASM Size" value={`${formatNumber(wasm.size)} bytes`} />}
       {info.liveUntilLedgerSeq !== undefined && (
