@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import InvocationHistory from "./InvocationHistory";
 import SectionHeader from "./SectionHeader";
+import { startVisibilityPolling } from "@/lib/visibility-poll";
 import { INVOCATION_PAGE_SIZE } from "@/lib/contract-lists";
 import type { InvocationHistoryItem } from "@/types";
 
@@ -35,18 +36,20 @@ export default function LiveInvocationHistory({
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
 
   useEffect(() => {
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/contract/${contractId}/invocations`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setItems(data.invocations);
-        setNextCursor(data.nextCursor ?? null);
-      } catch {
-        // keep showing the last good data
-      }
-    }, intervalMs);
-    return () => clearInterval(id);
+    return startVisibilityPolling({
+      intervalMs,
+      refresh: async () => {
+        try {
+          const res = await fetch(`/api/contract/${contractId}/invocations`);
+          if (!res.ok) return;
+          const data = await res.json();
+          setItems(data.invocations);
+          setNextCursor(data.nextCursor ?? null);
+        } catch {
+          // keep showing the last good data
+        }
+      },
+    });
   }, [contractId, intervalMs]);
 
   return (

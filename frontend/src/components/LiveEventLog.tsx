@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import EventLog from "./EventLog";
 import SectionHeader from "./SectionHeader";
+import { startVisibilityPolling } from "@/lib/visibility-poll";
 import type { ContractEvent, ContractEventSpec } from "@/types";
 
 interface Props {
@@ -37,22 +38,24 @@ export default function LiveEventLog({
   const [error, setError] = useState<string | null>(initialError);
 
   useEffect(() => {
-    const id = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/contract/${contractId}/events`);
-        const data = await res.json();
-        if (!res.ok || data.error) {
-          setError(data.error ?? "The RPC node rejected the request.");
-          return;
+    return startVisibilityPolling({
+      intervalMs,
+      refresh: async () => {
+        try {
+          const res = await fetch(`/api/contract/${contractId}/events`);
+          const data = await res.json();
+          if (!res.ok || data.error) {
+            setError(data.error ?? "The RPC node rejected the request.");
+            return;
+          }
+          setEvents(data.events);
+          setNextCursor(data.nextCursor ?? null);
+          setError(null);
+        } catch {
+          setError("The events API could not be reached.");
         }
-        setEvents(data.events);
-        setNextCursor(data.nextCursor ?? null);
-        setError(null);
-      } catch {
-        setError("The events API could not be reached.");
-      }
-    }, intervalMs);
-    return () => clearInterval(id);
+      },
+    });
   }, [contractId, intervalMs]);
 
   return (

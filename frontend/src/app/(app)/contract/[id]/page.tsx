@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { getContractInfo, getContractWasmInfo, getContractEventsPage, getInvocationHistoryPage, getFullStorageEntries } from "@/lib/soroban";
-import { isIndexerConfigured } from "@/lib/indexed-db";
+import { getIndexedGaps, getIndexerCursor, isIndexerConfigured } from "@/lib/indexed-db";
 import ContractOverview from "@/components/ContractOverview";
 import ContractStorageView from "@/components/ContractStorageView";
 import LiveInvocationHistory from "@/components/LiveInvocationHistory";
@@ -8,6 +8,8 @@ import InvokeTool from "@/components/InvokeTool";
 import LiveEventLog from "@/components/LiveEventLog";
 import CopyButton from "@/components/CopyButton";
 import SectionHeader from "@/components/SectionHeader";
+import IndexerStatus from "@/components/IndexerStatus";
+import IndexerGapsNotice from "@/components/IndexerGapsNotice";
 import { EVENT_PAGE_SIZE, INVOCATION_PAGE_SIZE } from "@/lib/contract-lists";
 
 export const dynamic = "force-dynamic";
@@ -32,11 +34,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ContractPage({ params }: Props) {
   const contractId = params.id;
   const info = await getContractInfo(contractId);
-  const [wasm, eventsPage, invocationsPage, fullStorage] = await Promise.all([
-    info?.executable === "wasm" ? getContractWasmInfo(contractId) : Promise.resolve(null),
+  const [wasm, eventsPage, invocationsPage, fullStorage, historyGaps, indexerCursor] = await Promise.all([
+    info?.executable === "wasm" ? getContractWasmInfo(contractId, info) : Promise.resolve(null),
     getContractEventsPage(contractId, { limit: EVENT_PAGE_SIZE }),
     getInvocationHistoryPage(contractId, { limit: INVOCATION_PAGE_SIZE }),
     getFullStorageEntries(contractId),
+    getIndexedGaps(),
+    getIndexerCursor(),
   ]);
 
   const rpcFallback = !isIndexerConfigured();
@@ -63,6 +67,8 @@ export default async function ContractPage({ params }: Props) {
           </section>
         )}
 
+        <IndexerStatus cursor={indexerCursor} />
+
         <section>
           <SectionHeader
             title="Storage"
@@ -74,6 +80,8 @@ export default async function ContractPage({ params }: Props) {
             fullStorage={fullStorage}
           />
         </section>
+
+        <IndexerGapsNotice gaps={historyGaps} />
 
         <section>
           <LiveInvocationHistory

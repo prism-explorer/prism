@@ -257,3 +257,26 @@ export async function getIndexedGaps(): Promise<IndexedGap[]> {
     createdAt: r.createdAt.toISOString(),
   }));
 }
+
+/** How far the indexer has processed, and when it last made progress. */
+export interface IndexerCursorStatus {
+  lastLedger: number;
+  updatedAt: string;
+}
+
+/**
+ * The singleton IndexerCursor row. `updatedAt` advances whenever the indexer
+ * commits progress, so comparing it with now tells us whether indexed lists
+ * are actually current or silently stale.
+ */
+export async function getIndexerCursor(): Promise<IndexerCursorStatus | null> {
+  if (!isIndexerConfigured()) return null;
+  const { rows } = await getPool().query(
+    `SELECT "lastLedger", "updatedAt" FROM "IndexerCursor" WHERE id = 1`
+  );
+  if (!rows[0]) return null;
+  return {
+    lastLedger: rows[0].lastLedger,
+    updatedAt: rows[0].updatedAt.toISOString(),
+  };
+}
