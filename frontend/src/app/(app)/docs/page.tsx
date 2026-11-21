@@ -8,12 +8,50 @@ interface Endpoint {
   notes?: string;
 }
 
+interface StatusNote {
+  code: string;
+  text: string;
+}
+
+const statuses: StatusNote[] = [
+  {
+    code: "200",
+    text: "Success. GET /api/contract/:id/events includes error: null. POST /simulate is also 200 when the simulation ran on the network: success true with the return value, or success false and error when the network rejected the call.",
+  },
+  {
+    code: "400",
+    text: 'Bad request, body { "error": "..." }. /wasm returns 400 for a Stellar Asset Contract, which has no WASM. /events and /invocations return 400 for an invalid cursor. /storage returns 400 when key is missing, kind is not symbol, string, u32, or address, or the key does not parse. /simulate returns 400 for invalid JSON, a missing functionName, or args that are not an array. Too many arguments for the declared function, or an argument that fails to coerce, is still 400 but the body is { "success": false, "error": "..." }. /ledger/:seq returns 400 when the sequence is not a base-10 integer from 0 through 4294967295.',
+  },
+  {
+    code: "404",
+    text: 'Not found, body { "error": "..." }. /api/contract/:id and /wasm: "Contract not found or unreachable". /storage: "No entry found for that key". /tx/:hash: "Transaction not found". /ledger/:seq: "Ledger not found".',
+  },
+  {
+    code: "413",
+    text: 'POST /simulate only, when the body is larger than 16 KB: { "error": "Request body too large" }.',
+  },
+  {
+    code: "429",
+    text: 'Rate limit, on every route. The body is { "error": "Rate limit exceeded. Try again shortly." } and the response includes Retry-After, the seconds left in the current one-minute window. Each GET route allows 30 requests a minute per client; POST /simulate allows 10.',
+  },
+  {
+    code: "501",
+    text: 'GET /storage/full when this deployment has no indexer: { "error": "No indexer configured for this deployment — full storage enumeration isn\'t available." }.',
+  },
+  {
+    code: "502",
+    text: 'Upstream failure. /wasm returns { "error": "Could not fetch WASM bytecode" } when the contract is WASM but the bytecode cannot be downloaded. /events returns { "events": [], "nextCursor": null, "error": "<reason>" } when the RPC event lookup fails; error there is the RPC message, and a normal page has error: null.',
+  },
+];
+
 const endpoints: Endpoint[] = [
   {
     method: "GET",
     path: "/api/contract/:id",
-    description: "Executable type, WASM hash, and instance storage for a contract.",
+    description: "Executable type, WASM hash, instance storage, and historyGaps for a contract.",
     example: "/api/contract/CDPUJYCTPGPEGS6MBXYLEWTYSGCPVKUHCURLF2ORT3RAVL5TF5JKIAI5",
+    notes:
+      "historyGaps lists ledger ranges the indexer skipped, each { fromLedger, toLedger, reason, createdAt }. createdAt is an ISO-8601 timestamp. The array is empty when no indexer is configured, and a gap applies to every contract.",
   },
   {
     method: "GET",
@@ -21,7 +59,8 @@ const endpoints: Endpoint[] = [
     description:
       "WASM bytecode size and a best-effort parsed ABI: function names, args and return types, any events the contract declares (name, topics, data fields), and its own type definitions (structs, unions, enums).",
     example: "/api/contract/CDPUJYCTPGPEGS6MBXYLEWTYSGCPVKUHCURLF2ORT3RAVL5TF5JKIAI5/wasm",
-    notes: "404s if the contract has no WASM (e.g. a Stellar Asset Contract).",
+    notes:
+      "Returns 400 if the contract has no WASM (e.g. a Stellar Asset Contract). 404 if the contract is missing or unreachable, 502 if the bytecode cannot be fetched.",
   },
   {
     method: "GET",
@@ -30,7 +69,7 @@ const endpoints: Endpoint[] = [
     params: "limit (default 50, max 100), cursor",
     example: "/api/contract/CDPUJYCTPGPEGS6MBXYLEWTYSGCPVKUHCURLF2ORT3RAVL5TF5JKIAI5/events?limit=10",
     notes:
-      "Full history since the indexer started, when one is configured (see indexer/), newest first. Each response has a nextCursor, null on the last page; pass it back as cursor to get the older events. Without an indexer, the RPC node's retention window (~24h on public nodes) is returned in one response and nextCursor is always null.",
+      "Full history since the indexer started, when one is configured (see indexer/), newest first. Each response has a nextCursor, null on the last page; pass it back as cursor to get the older events. Without an indexer, the RPC node's retention window (~24h on public nodes) is returned in one response and nextCursor is always null. If that RPC lookup fails the route returns 502 with events [], nextCursor null, and error set to the reason.",
   },
   {
     method: "GET",
@@ -128,6 +167,19 @@ export default function DocsPage() {
             </p>
             {ep.notes && <p className="text-xs text-prism-muted mt-2 italic">{ep.notes}</p>}
           </div>
+        ))}
+      </div>
+
+      <h2 className="text-lg font-semibold mt-10 mb-2">Errors</h2>
+      <p className="text-prism-muted text-sm mb-4 max-w-2xl">
+        Failures are JSON <code className="font-mono">{`{ "error": "..." }`}</code> unless the status
+        below names a different body. These are the status codes the routes return.
+      </p>
+      <div className="space-y-3 max-w-2xl">
+        {statuses.map((row) => (
+          <p key={row.code} className="text-sm text-prism-muted">
+            <span className="font-mono text-prism-strong">{row.code}</span> — {row.text}
+          </p>
         ))}
       </div>
     </div>
