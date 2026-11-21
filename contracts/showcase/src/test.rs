@@ -274,6 +274,20 @@ fn checksum_xors_every_byte() {
 }
 
 #[test]
+fn echoes_extended_argument_types() {
+    let env = Env::default();
+    let (client, _) = setup(&env);
+    let hash = BytesN::from_array(&env, &[7; 32]);
+    assert_eq!(client.echo_hash(&hash), hash);
+    assert_eq!(client.echo_u64(&u64::MAX), u64::MAX);
+    let i256 = soroban_sdk::Int256::from_i128(&env, -42);
+    assert_eq!(client.echo_i256(&i256), i256);
+    let tuple = (7u32, Symbol::new(&env, "tuple"));
+    assert_eq!(client.echo_tuple(&tuple), tuple);
+    assert_eq!(client.echo_timepoint(&123u64), 123u64);
+}
+
+#[test]
 fn stats_reports_the_contracts_own_address() {
     let env = Env::default();
     env.mock_all_auths();

@@ -214,6 +214,8 @@ export async function getContractEventsPage(
         type: e.type,
         topic: e.topic,
         value: e.value,
+        topicXdr: e.topicXdr,
+        valueXdr: e.valueXdr,
         txHash: e.txHash,
         ledger: e.ledger,
         timestamp: e.createdAt,

@@ -76,6 +76,8 @@ export interface ContractEvent {
   txHash: string;
   ledger: number;
   timestamp: string;
+  topicXdr?: string[];
+  valueXdr?: string;
 }
 
 export interface StorageEntry {

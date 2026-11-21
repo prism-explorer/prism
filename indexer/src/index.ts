@@ -5,6 +5,7 @@ import { Registry, Counter, Gauge, collectDefaultMetrics } from "prom-client";
 import { prisma, findCursor, seedCursor, setCursor, type Db } from "./db.js";
 import {
   decodeContractCreation,
+  decodeContractCreations,
   decodeInvocation,
   extractEvents,
   extractInvocationReturnValue,
@@ -57,6 +58,11 @@ export const metricLedgersProcessed = new Counter({
   help: "Total number of ledgers processed by the indexer",
   registers: [metricsRegistry],
 });
+export const metricPagesProcessed = new Counter({
+  name: "indexer_pages_processed_total",
+  help: "Total transaction pages processed by the indexer",
+  registers: [metricsRegistry],
+});
 
 export const metricRowsWritten = new Counter({
   name: "indexer_rows_written_total",
@@ -77,7 +83,7 @@ export const metricPollErrors = new Counter({
   registers: [metricsRegistry],
 });
 
-let server: rpc.Server;
+export let server: rpc.Server;
 
 let stopping = false;
 let wakeFromSleep = (): void => {};
@@ -216,18 +222,20 @@ export async function processTransaction(tx: rpc.Api.TransactionInfo, db: Db = p
   }
 
   if (tx.status === "SUCCESS" && sourceAccount) {
-    const contract = decodeContractCreation(tx.envelopeXdr, tx.resultMetaXdr, sourceAccount);
-    if (contract) {
+    const contracts = decodeContractCreations(tx.resultMetaXdr, sourceAccount);
+    if (contracts.length === 0) {
+      const contract = decodeContractCreation(tx.envelopeXdr, tx.resultMetaXdr, sourceAccount);
+      if (contract) contracts.push(contract);
+    }
+    if (contracts.length > 0) {
       const contractResult = await db.contract.createMany({
-        data: [
-          {
+        data: contracts.map((contract) => ({
             contractId: contract.contractId,
             creator: contract.creator,
             deploymentLedger: tx.ledger,
             deploymentTxHash: tx.txHash,
             createdAt,
-          },
-        ],
+          })),
         skipDuplicates: true,
       });
       metricRowsWritten.inc({ table: "contract" }, contractResult.count);
@@ -277,6 +285,8 @@ export async function processTransaction(tx: rpc.Api.TransactionInfo, db: Db = p
         type: e.type,
         topic: e.topic,
         value: e.value,
+        topicXdr: e.topicXdr,
+        valueXdr: e.valueXdr,
         txHash: tx.txHash,
         ledger: tx.ledger,
         createdAt,
@@ -444,6 +454,7 @@ async function main(): Promise<void> {
       if (cursor < latestNow.sequence || paginationCursor) {
         const page = await fetchPage(cursor, paginationCursor, latestNow.sequence);
         const { progress } = page;
+        const previousCursor = cursor;
         if (
           page.transactions.length > 0 ||
           progress.lastLedger !== cursor ||
@@ -456,8 +467,9 @@ async function main(): Promise<void> {
           console.log(`[indexer] processed through ledger ${cursor}`);
         }
         caughtUp = cursor >= latestNow.sequence && !paginationCursor;
-        if (page.transactions.length > 0) {
-          metricLedgersProcessed.inc();
+        if (page.transactions.length > 0 || cursor !== previousCursor) {
+          metricPagesProcessed.inc();
+          metricLedgersProcessed.inc(Math.max(0, cursor - previousCursor));
         }
       }
       if (STORAGE_HISTORY_RETENTION_LEDGERS !== null && !paginationCursor) {

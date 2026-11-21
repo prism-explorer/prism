@@ -106,6 +106,33 @@ export function decodeContractCreation(
   }
 }
 
+/** Return every contract instance created by this transaction, including
+ * instances created by a factory contract. */
+export function decodeContractCreations(
+  meta: xdr.TransactionMeta,
+  creator: string
+): DecodedContractCreation[] {
+  const version = meta.switch();
+  const value = version === 4 ? meta.v4() : version === 3 ? meta.v3() : null;
+  if (!value) return [];
+  const out: DecodedContractCreation[] = [];
+  for (const operation of value.operations()) {
+    for (const change of operation.changes()) {
+      if (change.switch().name !== "ledgerEntryCreated") continue;
+      const entry = change.created().data();
+      if (entry.switch().name !== "contractData") continue;
+      const data = entry.contractData();
+      if (data.key().switch().name !== "scvLedgerKeyContractInstance") continue;
+      try {
+        out.push({ contractId: Address.fromScAddress(data.contract()).toString(), creator });
+      } catch {
+        // Ignore malformed ledger entries while retaining the rest of a page.
+      }
+    }
+  }
+  return out;
+}
+
 function sorobanReturnValue(meta: xdr.TransactionMeta): xdr.ScVal | null {
   try {
     if (meta.switch() === 3) return meta.v3().sorobanMeta()?.returnValue() ?? null;
@@ -139,7 +166,7 @@ function contractDataKeyHash(cd: { contract(): xdr.ScAddress; key(): xdr.ScVal; 
     key: cd.key(),
     durability: cd.durability(),
   });
-  return createHash("sha256").update(xdr.LedgerKey.ledgerKeyContractData(key).toXDR()).digest("hex");
+  return createHash("sha256").update(xdr.LedgerKey.contractData(key).toXDR()).digest("hex");
 }
 
 export interface DecodedTtlChange {
@@ -284,6 +311,8 @@ export interface DecodedEvent {
   type: string;
   topic: string[];
   value: string;
+  topicXdr: string[];
+  valueXdr: string;
 }
 
 /**
@@ -334,6 +363,8 @@ function decodeEvent(
       type: event.type().name,
       topic: body.topics().map(scValToDisplay),
       value: scValToDisplay(body.data()),
+      topicXdr: body.topics().map((topic) => topic.toXDR("base64")),
+      valueXdr: body.data().toXDR("base64"),
     },
   ];
 }
