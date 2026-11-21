@@ -1,0 +1,3 @@
+ALTER TABLE "ContractEventRecord"
+ADD COLUMN "topicXdr" JSONB NOT NULL DEFAULT '[]',
+ADD COLUMN "valueXdr" TEXT NOT NULL DEFAULT '';
