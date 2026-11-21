@@ -72,6 +72,7 @@ export default async function ContractPage({ params }: Props) {
             contractId={contractId}
             instanceStorage={info?.instanceStorage ?? []}
             fullStorage={fullStorage}
+            types={wasm?.types}
           />
         </section>
 

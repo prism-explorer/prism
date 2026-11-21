@@ -14,11 +14,15 @@ export async function lookupStorageKeyAction(
   contractId: string,
   kind: StorageKeyKind,
   rawKey: string,
-  durability: "persistent" | "temporary"
+  durability: "persistent" | "temporary",
+  // The contract's own type definitions, forwarded from the page that already
+  // parsed them. Needed to coerce keys that are union/enum variants such as
+  // DataKey::Note, exactly as simulateInvocationAction does for arguments.
+  types: ContractTypeDef[] = []
 ): Promise<StorageEntry | { error: string }> {
   if (!rawKey.trim()) return { error: "Enter a key to look up." };
   try {
-    const key = parseStorageKeyInput(rawKey.trim(), kind);
+    const key = parseStorageKeyInput(rawKey.trim(), kind, types);
     const entry = await lookupStorageEntry(contractId, key, durability);
     return entry ?? { error: "No entry found — check the key type/durability, or it may not exist." };
   } catch (err) {

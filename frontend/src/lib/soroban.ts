@@ -1,4 +1,4 @@
-import { Account, Address, BASE_FEE, Contract, Keypair, TransactionBuilder, rpc, xdr } from "@stellar/stellar-sdk";
+import { Account, BASE_FEE, Contract, Keypair, TransactionBuilder, rpc, xdr } from "@stellar/stellar-sdk";
 import type {
   ContractEvent,
   ContractInfo,
@@ -7,13 +7,17 @@ import type {
   StorageEntry,
 } from "@/types";
 import {
+  coerceArgInput,
   decodeInvocation,
   parseContractEvents,
   parseContractSpec,
   parseContractTypes,
   scValToDisplay,
+  type ParsedTypeDef,
 } from "./xdr";
 import { config } from "./config";
+// Re-exported for callers that already import key helpers from this module.
+export { SIMPLE_STORAGE_KEY_KINDS, type SimpleStorageKeyKind } from "./storage-key-validation";
 import type { HistoryPage, PageRequest } from "./history-cursor";
 import { EVENT_PAGE_SIZE, INVOCATION_PAGE_SIZE } from "./contract-lists";
 import {
@@ -84,19 +88,24 @@ export async function getContractInfo(contractId: string): Promise<ContractInfo 
   };
 }
 
-export type StorageKeyKind = "symbol" | "string" | "u32" | "address";
+/**
+ * A storage key's type. Any Soroban spec type string is accepted — including
+ * contract-defined unions/enums such as `DataKey` and compound types such as
+ * `Vec<Symbol>` — so a key can be written exactly as the contract declares it.
+ */
+export type StorageKeyKind = string;
 
-export function parseStorageKeyInput(raw: string, kind: StorageKeyKind): xdr.ScVal {
-  switch (kind) {
-    case "symbol":
-      return xdr.ScVal.scvSymbol(raw);
-    case "string":
-      return xdr.ScVal.scvString(raw);
-    case "u32":
-      return xdr.ScVal.scvU32(Number(raw));
-    case "address":
-      return new Address(raw).toScVal();
-  }
+/**
+ * Build a storage key ScVal with the same coercion the invoke tool uses, so
+ * contract-defined and compound key types work here too. The four simple
+ * kinds remain as the UI's presets.
+ */
+export function parseStorageKeyInput(
+  raw: string,
+  specType: StorageKeyKind,
+  types: ParsedTypeDef[] = []
+): xdr.ScVal {
+  return coerceArgInput(raw, specType, types);
 }
 
 export async function lookupStorageEntry(
@@ -114,6 +123,7 @@ export async function lookupStorageEntry(
       key: scValToDisplay(key),
       value: scValToDisplay(entry.val.contractData().val()),
       durability,
+      liveUntilLedgerSeq: entry.liveUntilLedgerSeq,
     };
   } catch {
     return null;
@@ -127,6 +137,7 @@ export async function getFullStorageEntries(contractId: string): Promise<Storage
     key: e.keyDisplay,
     value: e.valueDisplay,
     durability: e.durability as StorageEntry["durability"],
+    liveUntilLedgerSeq: e.liveUntilLedger ?? undefined,
   }));
 }
 

@@ -82,6 +82,8 @@ export interface StorageEntry {
   key: string;
   value: string;
   durability: "persistent" | "temporary" | "instance";
+  /** Ledger at which a persistent/temporary entry expires, when known. */
+  liveUntilLedgerSeq?: number;
 }
 
 export interface ContractInfo {

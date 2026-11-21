@@ -16,6 +16,7 @@ import {
   getContractInfo,
   getInvocationHistory,
   getInvocationReturnValue,
+  lookupStorageEntry,
   simulateInvocation,
 } from "./soroban";
 import {
@@ -105,6 +106,35 @@ describe("getContractInfo", () => {
       creator: "GCREATOR",
       deploymentLedger: 88,
     });
+  });
+});
+
+describe("lookupStorageEntry", () => {
+  it("keeps the RPC live-until ledger on the returned entry", async () => {
+    vi.spyOn(rpc.Server.prototype, "getContractData").mockResolvedValue({
+      val: {
+        contractData: () => ({
+          val: () => nativeToScVal("written via caller", { type: "string" }),
+        }),
+      },
+      liveUntilLedgerSeq: 12345,
+      lastModifiedLedgerSeq: 90,
+    } as never);
+
+    const key = nativeToScVal("session", { type: "symbol" });
+    await expect(lookupStorageEntry("contract-id", key, "temporary")).resolves.toEqual({
+      key: "session",
+      value: "written via caller",
+      durability: "temporary",
+      liveUntilLedgerSeq: 12345,
+    });
+  });
+
+  it("returns null when the entry does not exist", async () => {
+    vi.spyOn(rpc.Server.prototype, "getContractData").mockRejectedValue(new Error("not found"));
+    await expect(
+      lookupStorageEntry("contract-id", nativeToScVal("x", { type: "symbol" }), "persistent")
+    ).resolves.toBeNull();
   });
 });
 
