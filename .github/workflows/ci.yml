@@ -21,8 +21,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: "npm"
@@ -34,7 +34,7 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run test:coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: frontend-coverage
           path: frontend/coverage/
@@ -54,8 +54,8 @@ jobs:
       run:
         working-directory: indexer
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: "20"
           cache: "npm"
@@ -68,7 +68,7 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run lint
       - run: npm run test:coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: indexer-coverage
           path: indexer/coverage/
@@ -82,7 +82,7 @@ jobs:
       run:
         working-directory: contracts
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # rustup reads contracts/rust-toolchain.toml, which pins the channel and
       # pulls in the wasm target plus rustfmt and clippy.
       - run: rustup show active-toolchain
@@ -102,7 +102,7 @@ jobs:
     name: Docker Images & Compose Config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Validates docker-compose.yml and its variable interpolation without
       # starting any containers.
       - run: docker compose config --quiet
