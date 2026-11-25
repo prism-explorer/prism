@@ -49,7 +49,7 @@ model Invocation {
   functionName  String
   args          Json
   successful    Boolean
-  sourceAccount String
+  sourceAccount String?
   returnValue   String?
 
   @@unique([txHash, opIndex])

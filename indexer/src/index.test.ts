@@ -1,11 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { xdr } from "@stellar/stellar-sdk";
 import {
   backoffDelay,
   commitPage,
   healthReport,
+  processTransaction,
   pruneStorageHistory,
   seedLastLedger,
 } from "./index.js";
+import failedInvokeFixture from "./fixtures/failed-invoke.json" with { type: "json" };
 
 describe("backoffDelay", () => {
   it("doubles the delay for each consecutive failure", () => {
@@ -190,5 +193,70 @@ describe("pruneStorageHistory", () => {
     expect(statement).toContain("EXISTS");
     expect(statement).toContain('newer."keyDisplay" = older."keyDisplay"');
     expect(statement).toContain("newer.ledger > older.ledger");
+  });
+});
+
+describe("processTransaction source account", () => {
+  type Tx = Parameters<typeof processTransaction>[0];
+  type Client = NonNullable<Parameters<typeof processTransaction>[1]>;
+
+  function run(breakSource: boolean) {
+    const envelopeXdr = xdr.TransactionEnvelope.fromXDR(
+      failedInvokeFixture.envelopeXdr,
+      "base64"
+    );
+    if (breakSource) {
+      // Make the source account undecodable while the invocation still decodes.
+      envelopeXdr.v1().tx().sourceAccount = () => {
+        throw new Error("bad source account");
+      };
+    }
+    const tx = {
+      txHash: failedInvokeFixture.hash,
+      ledger: failedInvokeFixture.ledger,
+      status: failedInvokeFixture.status,
+      createdAt: 1_700_000_000,
+      envelopeXdr,
+      resultMetaXdr: xdr.TransactionMeta.fromXDR(
+        failedInvokeFixture.resultMetaXdr,
+        "base64"
+      ),
+    } as unknown as Tx;
+    const rows: { sourceAccount: string | null }[] = [];
+    const db = {
+      invocation: {
+        createMany: async ({ data }: { data: typeof rows }) => {
+          rows.push(...data);
+          return { count: data.length };
+        },
+      },
+    } as unknown as Client;
+    return { tx, db, rows };
+  }
+
+  it("logs a warning and stores a null source for an unparseable envelope", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { tx, db, rows } = run(true);
+      await processTransaction(tx, db);
+      expect(rows.length).toBeGreaterThan(0);
+      for (const row of rows) expect(row.sourceAccount).toBeNull();
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(String(warn.mock.calls[0][0])).toContain(failedInvokeFixture.hash);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("stores the decoded source and does not warn for a valid envelope", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const { tx, db, rows } = run(false);
+      await processTransaction(tx, db);
+      expect(rows[0].sourceAccount).toMatch(/^G[A-Z2-7]{55}$/);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

@@ -195,15 +195,22 @@ function requestShutdown(signal: NodeJS.Signals): void {
   wakeFromSleep();
 }
 
-function sourceAccountOf(envelope: xdr.TransactionEnvelope): string {
+function sourceAccountOf(
+  envelope: xdr.TransactionEnvelope,
+  txHash: string
+): string | null {
   try {
     const tx =
       envelope.switch().name === "envelopeTypeTxFeeBump"
         ? envelope.feeBump().tx().innerTx().v1().tx()
         : envelope.v1().tx();
     return encodeMuxedAccountToAddress(tx.sourceAccount());
-  } catch {
-    return "";
+  } catch (err) {
+    console.warn(
+      `[indexer] could not decode source account for tx ${txHash}, storing null:`,
+      err instanceof Error ? err.message : err
+    );
+    return null;
   }
 }
 
@@ -232,7 +239,7 @@ export async function processTransaction(
 ): Promise<void> {
   const createdAt = new Date(tx.createdAt * 1000);
   const invocations = decodeInvocation(tx.envelopeXdr);
-  const sourceAccount = sourceAccountOf(tx.envelopeXdr);
+  const sourceAccount = sourceAccountOf(tx.envelopeXdr, tx.txHash);
 
   if (invocations.length > 0) {
     // skipDuplicates makes reprocessing a page after a crash-before-cursor-advance safe.
